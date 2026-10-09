@@ -17,7 +17,9 @@ public sealed class AppUpdater
     {
         try
         {
-            var manager = new UpdateManager(new GithubSource(AppInfo.RepositoryUrl, null, false, null), null, null);
+            // Pre-release builds (e.g. 0.2.0-beta.1) also follow pre-releases; stable builds only see stable releases
+            var followPrereleases = AppInfo.Version.Contains('-', StringComparison.Ordinal);
+            var manager = new UpdateManager(new GithubSource(AppInfo.RepositoryUrl, null, followPrereleases, null), null, null);
             if (manager.IsInstalled) _manager = manager;
         }
         catch (Exception)
