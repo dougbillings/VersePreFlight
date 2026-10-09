@@ -5,6 +5,7 @@ using Avalonia.Media;
 using Avalonia.Threading;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
+using Velopack;
 using VersePreflight.App.Services;
 using VersePreflight.App.Theme;
 using VersePreflight.Core;
@@ -32,16 +33,19 @@ public sealed partial class MainViewModel : ViewModelBase, IDisposable
     private readonly HttpClient _http;
     private readonly StarStringsInstaller _starStrings;
     private readonly DispatcherTimer _gameTimer;
+    private readonly AppUpdater _updater;
     private readonly Dictionary<string, bool> _cacheSelections = new(StringComparer.Ordinal);
     private PreflightConfig _config;
     private IReadOnlyList<GameEnvironment> _environments = [];
+    private UpdateInfo? _pendingUpdate;
 
-    public MainViewModel(IPlatform platform, ConfigStore store, PreflightLog log, IUiServices ui)
+    public MainViewModel(IPlatform platform, ConfigStore store, PreflightLog log, IUiServices ui, AppUpdater updater)
     {
         _platform = platform;
         _store = store;
         _log = log;
         _ui = ui;
+        _updater = updater;
         _log.EntryWritten += OnLogEntry;
 
         try
@@ -86,12 +90,15 @@ public sealed partial class MainViewModel : ViewModelBase, IDisposable
     [ObservableProperty] public partial string LinkRootText { get; set; } = "";
     [ObservableProperty] public partial bool HasEnvironments { get; set; }
     [ObservableProperty] public partial bool HasCacheItems { get; set; }
+    [ObservableProperty] public partial bool IsUpdateAvailable { get; set; }
+    [ObservableProperty] public partial string UpdateButtonText { get; set; } = "";
 
     public bool CanAct => !IsBusy && !IsGameRunning;
 
     public async Task InitializeAsync()
     {
-        _log.Info($"{AppInfo.Name} {AppInfo.Version} started on {Environment.MachineName}.");
+        _log.Info($"{AppInfo.Name} {AppInfo.Version} started on {Environment.MachineName}" +
+                  (_store.IsPortable ? " (portable)." : "."));
         await CheckGameRunningAsync();
         _gameTimer.Start();
 
@@ -102,6 +109,52 @@ public sealed partial class MainViewModel : ViewModelBase, IDisposable
             return;
         }
         await RefreshAsync();
+        if (_config.CheckForUpdates) await CheckForAppUpdateAsync();
+    }
+
+    private async Task CheckForAppUpdateAsync()
+    {
+        if (!_updater.IsSupported) return;
+        try
+        {
+            _pendingUpdate = await _updater.CheckAsync();
+            if (_pendingUpdate is null) return;
+            var version = _pendingUpdate.TargetFullRelease.Version;
+            UpdateButtonText = $"UPDATE TO v{version}";
+            IsUpdateAvailable = true;
+            _log.Info($"{AppInfo.Name} v{version} is available.");
+        }
+        catch (Exception e)
+        {
+            // An update check must never get in the way of using the app
+            _log.Warning($"Could not check for app updates: {e.Message}");
+        }
+    }
+
+    [RelayCommand]
+    private async Task InstallAppUpdateAsync()
+    {
+        if (_pendingUpdate is not { } update || IsBusy) return;
+        var version = update.TargetFullRelease.Version;
+        if (!await ConfirmAsync("APP UPDATE",
+                $"{AppInfo.Name} v{version} is available (you have v{AppInfo.Version}).\n\n" +
+                "Download it now? The app restarts when the update is ready. Your settings are kept.",
+                "UPDATE & RESTART"))
+            return;
+
+        IsBusy = true;
+        try
+        {
+            _log.Info($"Downloading {AppInfo.Name} v{version}...");
+            await _updater.DownloadAndRestartAsync(update, percent =>
+                Dispatcher.UIThread.Post(() => SetStatus($"DOWNLOADING UPDATE  {percent}%", Hud.AccentBrush)));
+        }
+        catch (Exception e)
+        {
+            _log.Error($"App update failed: {e.Message}");
+            IsBusy = false;
+            UpdateIdleStatus();
+        }
     }
 
     // ---------------------------------------------------------------- commands
@@ -448,6 +501,7 @@ public sealed partial class MainViewModel : ViewModelBase, IDisposable
         try
         {
             await RefreshAsync();
+            if (_config.CheckForUpdates && !IsUpdateAvailable) await CheckForAppUpdateAsync();
         }
         catch (Exception e)
         {

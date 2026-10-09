@@ -64,7 +64,12 @@ public class ConfigStoreTests
 
         Assert.Equal(dir.Combine("roaming"), ConfigStore.CreateDefault(app, dir.Combine("roaming"), "PC1").ConfigDirectory);
 
+        Assert.False(ConfigStore.CreateDefault(app, dir.Combine("roaming"), "PC1").IsPortable);
+        Assert.True(ConfigStore.CreateDefault(app, dir.Combine("roaming"), "PC1", forcePortable: true).IsPortable);
+
         File.WriteAllText(Path.Combine(app, ConfigStore.PortableMarkerFile), "");
-        Assert.Equal(app, ConfigStore.CreateDefault(app, dir.Combine("roaming"), "PC1").ConfigDirectory);
+        var store = ConfigStore.CreateDefault(app, dir.Combine("roaming"), "PC1");
+        Assert.Equal(app, store.ConfigDirectory);
+        Assert.True(store.IsPortable);
     }
 }

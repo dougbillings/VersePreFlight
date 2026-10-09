@@ -43,6 +43,8 @@
                 </c:HudFrame>
 
                 <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="10" VerticalAlignment="Center">
+                    <Button Classes="hud small update" Content="{Binding UpdateButtonText}" Command="{Binding InstallAppUpdateCommand}"
+                            IsVisible="{Binding IsUpdateAvailable}" IsEnabled="{Binding !IsBusy}" />
                     <Button Classes="hud small" Content="REFRESH" Command="{Binding RefreshNowCommand}" IsEnabled="{Binding !IsBusy}" />
                     <Button Classes="hud small" Content="SETTINGS" Command="{Binding OpenSettingsCommand}" IsEnabled="{Binding !IsBusy}" />
                     <Button Classes="hud small" Content="ABOUT" Command="{Binding OpenAboutCommand}" />

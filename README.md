@@ -43,6 +43,25 @@ dotnet run --project src/VersePreflight.App
 The app icon is generated from code: `dotnet run tools/IconGen/IconGen.cs`
 (add `-- --preview preview.png` to see the small sizes enlarged).
 
+### Releases
+
+Releases are built by GitHub Actions when a version tag is pushed (`git tag v0.1.0 && git push origin v0.1.0`).
+Tags with a suffix such as `v0.2.0-beta.1` become pre-releases. Each release has:
+
+- **Setup.exe**: per-user install (no admin) with Start menu and desktop shortcuts and automatic updates.
+- **Portable.zip**: unzip anywhere; settings are kept next to the app, one file per PC.
+
+Packaging uses [Velopack](https://velopack.io). To build a release locally:
+
+```sh
+dotnet publish src/VersePreflight.App -p:PublishProfile=win-x64 -p:Version=0.1.0 -o publish
+dotnet tool restore
+dotnet vpk pack -u VersePreflight -v 0.1.0 -p publish -e VersePreflight.exe -i src/VersePreflight.App/Assets/app.ico
+```
+
+The app checks this repository's GitHub Releases for new versions at startup (it can be turned off in
+Settings). No other network requests are made, apart from StarStrings downloads when enabled.
+
 ## Credits
 
 - **StarStrings** by [MrKraken](https://github.com/MrKraken/StarStrings): a community-made,

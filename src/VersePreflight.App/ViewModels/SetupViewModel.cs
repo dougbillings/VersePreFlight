@@ -38,7 +38,7 @@ public sealed partial class SetupViewModel : ViewModelBase
         _store = store;
         _ui = ui;
         _close = close;
-        _isPortable = PathUtil.IsSamePath(store.ConfigDirectory, AppContext.BaseDirectory);
+        _isPortable = store.IsPortable;
         IsFirstRun = isFirstRun;
 
         GameBaseCandidates = platform.FindGameBaseCandidates();

@@ -1,3 +1,5 @@
+using System.Reflection;
+
 namespace VersePreflight.Core;
 
 /// <summary>
@@ -12,8 +14,17 @@ public static class AppInfo
     /// <summary>Folder/file-name friendly identifier.</summary>
     public const string Id = "VersePreflight";
 
-    public static string Version =>
-        typeof(AppInfo).Assembly.GetName().Version?.ToString(3) ?? "0.0.0";
+    /// <summary>The release version, including any pre-release suffix (e.g. "0.2.0-beta.1").</summary>
+    public static string Version { get; } = ReadVersion();
+
+    private static string ReadVersion()
+    {
+        var assembly = typeof(AppInfo).Assembly;
+        var informational = assembly.GetCustomAttribute<AssemblyInformationalVersionAttribute>()?.InformationalVersion;
+        if (!string.IsNullOrEmpty(informational))
+            return informational.Split('+')[0]; // drop the "+commit" build metadata
+        return assembly.GetName().Version?.ToString(3) ?? "0.0.0";
+    }
 
     /// <summary>Short notice for the always-visible main window footer.</summary>
     public const string ShortDisclaimer =

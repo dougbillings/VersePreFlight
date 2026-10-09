@@ -122,6 +122,11 @@
         <Setter Property="BorderBrush" Value="{x:Static t:Hud.BadBrush}" />
     </Style>
 
+    <Style Selector="Button.update">
+        <Setter Property="BorderBrush" Value="{x:Static t:Hud.GoodBrush}" />
+        <Setter Property="Foreground" Value="{x:Static t:Hud.GoodBrush}" />
+    </Style>
+
     <Style Selector="Button.small">
         <Setter Property="MinHeight" Value="34" />
         <Setter Property="Padding" Value="12,4" />

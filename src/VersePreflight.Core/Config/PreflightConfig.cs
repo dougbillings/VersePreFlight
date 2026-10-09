@@ -53,10 +53,16 @@ public sealed class ConfigStore
 
     public string FilePath { get; }
 
-    public static ConfigStore CreateDefault(string appDirectory, string platformConfigDirectory, string machineName)
+    /// <summary>True when settings live beside the app (portable mode) rather than in the user profile.</summary>
+    public bool IsPortable { get; private init; }
+
+    /// <param name="appDirectory">The app's root folder (for packaged installs, the folder that survives updates).</param>
+    /// <param name="forcePortable">True when the app was distributed as a portable package.</param>
+    public static ConfigStore CreateDefault(string appDirectory, string platformConfigDirectory, string machineName,
+        bool forcePortable = false)
     {
-        var portable = File.Exists(Path.Combine(appDirectory, PortableMarkerFile));
-        return new ConfigStore(portable ? appDirectory : platformConfigDirectory, machineName);
+        var portable = forcePortable || File.Exists(Path.Combine(appDirectory, PortableMarkerFile));
+        return new ConfigStore(portable ? appDirectory : platformConfigDirectory, machineName) { IsPortable = portable };
     }
 
     public bool Exists => File.Exists(FilePath);

@@ -38,6 +38,7 @@ and apply to every contribution and release:
 | [.NET](https://github.com/dotnet/runtime) | .NET Foundation | MIT |
 | [Avalonia](https://github.com/AvaloniaUI/Avalonia) | AvaloniaUI OÜ | MIT |
 | [SkiaSharp](https://github.com/mono/SkiaSharp) (via Avalonia; also used to generate the icon) | Microsoft | MIT |
+| [Velopack](https://github.com/velopack/velopack) (installer and updates) | Velopack Ltd | MIT |
 | [CommunityToolkit.Mvvm](https://github.com/CommunityToolkit/dotnet) | .NET Foundation | MIT |
 | [Inter](https://github.com/rsms/inter) font (via Avalonia.Fonts.Inter) | Rasmus Andersson | SIL Open Font License 1.1 |
 
