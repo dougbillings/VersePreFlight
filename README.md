@@ -1,3 +1,5 @@
+<img src="assets/icon-256.png" alt="Verse Preflight icon" width="96" align="right" />
+
 # Verse Preflight
 
 > **This is an unofficial Star Citizen fan project, not affiliated with the Cloud Imperium group of companies. All content in this project not authored by its developers or users is property of their respective owners.**
@@ -37,6 +39,9 @@ Requires the [.NET 10 SDK](https://dotnet.microsoft.com/download).
 dotnet test
 dotnet run --project src/VersePreflight.App
 ```
+
+The app icon is generated from code: `dotnet run tools/IconGen/IconGen.cs`
+(add `-- --preview preview.png` to see the small sizes enlarged).
 
 ## Credits
 
