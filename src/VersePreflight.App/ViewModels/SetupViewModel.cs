@@ -48,7 +48,8 @@ public sealed partial class SetupViewModel : ViewModelBase
             : Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments), AppInfo.Id));
         StarStringsEnabled = current.StarStringsEnabled;
         StarStringsIncludePtu = current.StarStringsIncludePtu;
-        Links = new(current.Links.Select(l => new LinkToggleViewModel(new LinkDefinition
+        CheckForUpdates = current.CheckForUpdates;
+        Links =new(current.Links.Select(l => new LinkToggleViewModel(new LinkDefinition
         {
             Name = l.Name, SourceSubPath = l.SourceSubPath, TargetName = l.TargetName, Enabled = l.Enabled,
         })));
@@ -73,6 +74,7 @@ public sealed partial class SetupViewModel : ViewModelBase
 
     [ObservableProperty] public partial bool StarStringsEnabled { get; set; }
     [ObservableProperty] public partial bool StarStringsIncludePtu { get; set; }
+    [ObservableProperty] public partial bool CheckForUpdates { get; set; }
 
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(CanSave))]
@@ -140,6 +142,7 @@ public sealed partial class SetupViewModel : ViewModelBase
             }).ToList(),
             StarStringsEnabled = StarStringsEnabled,
             StarStringsIncludePtu = StarStringsIncludePtu,
+            CheckForUpdates = CheckForUpdates,
             StarStringsInstalled = new(_current.StarStringsInstalled, StringComparer.OrdinalIgnoreCase),
         });
     }

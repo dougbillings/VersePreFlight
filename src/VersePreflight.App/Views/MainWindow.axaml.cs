@@ -17,6 +17,16 @@ public partial class MainWindow : Window, IUiServices
         {
             if (DataContext is MainViewModel vm) vm.LogEntries.CollectionChanged += OnLogChanged;
         };
+        Opened += (_, _) => FitToScreen();
+    }
+
+    /// <summary>On small screens (e.g. a 1280x720 handheld) the default size doesn't fit, so open maximized.</summary>
+    private void FitToScreen()
+    {
+        if ((Screens.ScreenFromWindow(this) ?? Screens.Primary) is not { } screen) return;
+        var available = screen.WorkingArea.Size.ToSize(screen.Scaling);
+        if (available.Width < Width + 40 || available.Height < Height + 40)
+            WindowState = WindowState.Maximized;
     }
 
     private void OnLogChanged(object? sender, NotifyCollectionChangedEventArgs e) =>
