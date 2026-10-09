@@ -1,0 +1,15 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <RootNamespace>VersePreflight.Core</RootNamespace>
+    <!-- The GUI ships trimmed/single-file, so keep Core free of reflection-based APIs -->
+    <IsAotCompatible>true</IsAotCompatible>
+    <!-- Needed by [LibraryImport] for the Windows junction P/Invoke -->
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="VersePreflight.Core.Tests" />
+  </ItemGroup>
+
+</Project>
