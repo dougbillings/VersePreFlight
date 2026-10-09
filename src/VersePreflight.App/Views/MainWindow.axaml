@@ -1,0 +1,207 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:vm="using:VersePreflight.App.ViewModels"
+        xmlns:v="using:VersePreflight.App.Views"
+        xmlns:c="using:VersePreflight.App.Controls"
+        xmlns:t="using:VersePreflight.App.Theme"
+        x:Class="VersePreflight.App.Views.MainWindow"
+        x:DataType="vm:MainViewModel"
+        Title="Verse Preflight"
+        Width="1280" Height="780" MinWidth="1000" MinHeight="640"
+        WindowStartupLocation="CenterScreen"
+        Background="{x:Static t:Hud.Bg0Brush}">
+
+    <Window.DataTemplates>
+        <DataTemplate DataType="vm:SetupViewModel"><v:SetupView /></DataTemplate>
+        <DataTemplate DataType="vm:AboutViewModel"><v:AboutView /></DataTemplate>
+        <DataTemplate DataType="vm:ConfirmViewModel"><v:ConfirmView /></DataTemplate>
+    </Window.DataTemplates>
+
+    <Grid>
+        <c:HudBackground />
+
+        <Grid RowDefinitions="Auto,*,Auto,Auto" Margin="22,16,22,10">
+
+            <!-- Header -->
+            <Grid ColumnDefinitions="Auto,*,Auto">
+                <StackPanel Orientation="Horizontal" Spacing="14" VerticalAlignment="Center">
+                    <v:LogoMark Width="40" Height="40" />
+                    <StackPanel VerticalAlignment="Center">
+                        <TextBlock Classes="title" Text="VERSE PREFLIGHT" />
+                        <TextBlock Classes="label" Text="{Binding Version}" />
+                    </StackPanel>
+                </StackPanel>
+
+                <c:HudFrame Grid.Column="1" Classes="panel" HorizontalAlignment="Center" VerticalAlignment="Center"
+                            Cut="10" Padding="18,9" Margin="24,0">
+                    <StackPanel Orientation="Horizontal" Spacing="10">
+                        <Ellipse Width="9" Height="9" Fill="{Binding StatusBrush}" VerticalAlignment="Center" />
+                        <TextBlock Classes="chip" FontSize="13" Text="{Binding StatusText}"
+                                   Foreground="{Binding StatusBrush}" VerticalAlignment="Center" />
+                    </StackPanel>
+                </c:HudFrame>
+
+                <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="10" VerticalAlignment="Center">
+                    <Button Classes="hud small" Content="REFRESH" Command="{Binding RefreshNowCommand}" IsEnabled="{Binding !IsBusy}" />
+                    <Button Classes="hud small" Content="SETTINGS" Command="{Binding OpenSettingsCommand}" IsEnabled="{Binding !IsBusy}" />
+                    <Button Classes="hud small" Content="ABOUT" Command="{Binding OpenAboutCommand}" />
+                </StackPanel>
+            </Grid>
+
+            <ProgressBar Grid.Row="0" Classes="busy" IsIndeterminate="True" IsVisible="{Binding IsBusy}"
+                         VerticalAlignment="Bottom" Margin="0,0,0,-10" />
+
+            <!-- Body -->
+            <Grid Grid.Row="1" ColumnDefinitions="*,20,380" Margin="0,22,0,0">
+
+                <!-- Installs -->
+                <DockPanel>
+                    <Grid DockPanel.Dock="Top" ColumnDefinitions="Auto,*" Margin="0,0,0,10">
+                        <TextBlock Classes="section" Text="// INSTALLS" />
+                        <TextBlock Grid.Column="1" Classes="label mono" Text="{Binding LinkRootText}"
+                                   HorizontalAlignment="Right" TextTrimming="CharacterEllipsis" Margin="16,0,0,0" />
+                    </Grid>
+
+                    <Panel>
+                        <ScrollViewer>
+                            <ItemsControl ItemsSource="{Binding Environments}">
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate x:DataType="vm:EnvironmentViewModel">
+                                        <c:HudFrame Classes="panel" Margin="0,0,0,14" Padding="20,14">
+                                            <StackPanel Spacing="10">
+                                                <Grid ColumnDefinitions="Auto,*">
+                                                    <TextBlock Classes="h2" Text="{Binding Name}" />
+                                                    <TextBlock Grid.Column="1" Classes="label mono" Text="{Binding BuildText}"
+                                                               HorizontalAlignment="Right" VerticalAlignment="Center" />
+                                                </Grid>
+                                                <Rectangle Height="1" Fill="{x:Static t:Hud.LineBrush}" />
+
+                                                <ItemsControl ItemsSource="{Binding Links}">
+                                                    <ItemsControl.ItemTemplate>
+                                                        <DataTemplate x:DataType="vm:LinkStatusViewModel">
+                                                            <Grid ColumnDefinitions="170,Auto,*" Margin="0,3">
+                                                                <TextBlock Text="{Binding Name}" VerticalAlignment="Center" />
+                                                                <Border Grid.Column="1" Classes="chip" BorderBrush="{Binding Brush}">
+                                                                    <TextBlock Classes="chip" Text="{Binding StateText}" Foreground="{Binding Brush}"
+                                                                               HorizontalAlignment="Center" />
+                                                                </Border>
+                                                                <TextBlock Grid.Column="2" Classes="dim mono" Text="{Binding Detail}"
+                                                                           Margin="14,0,0,0" VerticalAlignment="Center"
+                                                                           TextTrimming="CharacterEllipsis" ToolTip.Tip="{Binding Detail}" />
+                                                            </Grid>
+                                                        </DataTemplate>
+                                                    </ItemsControl.ItemTemplate>
+                                                </ItemsControl>
+
+                                                <Grid ColumnDefinitions="170,Auto,*" Margin="0,3">
+                                                    <TextBlock Text="StarStrings" VerticalAlignment="Center" />
+                                                    <Border Grid.Column="1" Classes="chip" BorderBrush="{Binding StarStringsBrush}">
+                                                        <TextBlock Classes="chip" Text="{Binding StarStringsState}"
+                                                                   Foreground="{Binding StarStringsBrush}" HorizontalAlignment="Center" />
+                                                    </Border>
+                                                    <TextBlock Grid.Column="2" Classes="dim mono" Text="{Binding StarStringsDetail}"
+                                                               Margin="14,0,0,0" VerticalAlignment="Center"
+                                                               TextTrimming="CharacterEllipsis" ToolTip.Tip="{Binding StarStringsDetail}" />
+                                                </Grid>
+                                            </StackPanel>
+                                        </c:HudFrame>
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
+                        </ScrollViewer>
+
+                        <c:HudFrame Classes="panel" Padding="24" VerticalAlignment="Top" IsVisible="{Binding !HasEnvironments}">
+                            <StackPanel Spacing="8">
+                                <TextBlock Classes="h2" Text="NO INSTALLS DETECTED" />
+                                <TextBlock Classes="dim" TextWrapping="Wrap"
+                                           Text="Open Settings and choose the folder that contains your LIVE / PTU installs." />
+                            </StackPanel>
+                        </c:HudFrame>
+                    </Panel>
+                </DockPanel>
+
+                <!-- Cache + actions -->
+                <DockPanel Grid.Column="2">
+                    <StackPanel DockPanel.Dock="Bottom" Spacing="10" Margin="0,14,0,0">
+                        <Button Classes="hud primary" HorizontalAlignment="Stretch" Content="RUN PREFLIGHT"
+                                Command="{Binding RunPreflightCommand}" IsEnabled="{Binding CanAct}"
+                                ToolTip.Tip="Link folders, clean the selected caches and update StarStrings (if enabled)" />
+                        <UniformGrid Columns="2" ColumnSpacing="10" RowSpacing="10">
+                            <Button Classes="hud" HorizontalAlignment="Stretch" Content="LINK FOLDERS"
+                                    Command="{Binding LinkFoldersCommand}" IsEnabled="{Binding CanAct}" />
+                            <Button Classes="hud" HorizontalAlignment="Stretch" Content="CLEAN CACHE"
+                                    Command="{Binding CleanCacheCommand}" IsEnabled="{Binding CanAct}" />
+                            <Button Classes="hud" HorizontalAlignment="Stretch" Content="STARSTRINGS"
+                                    Command="{Binding UpdateStarStringsCommand}" IsEnabled="{Binding CanAct}" />
+                            <Button Classes="hud danger" HorizontalAlignment="Stretch" Content="UNDO LINKS"
+                                    Command="{Binding UndoLinksCommand}" IsEnabled="{Binding CanAct}" />
+                        </UniformGrid>
+                    </StackPanel>
+
+                    <Grid DockPanel.Dock="Top" ColumnDefinitions="Auto,*" Margin="0,0,0,10">
+                        <TextBlock Classes="section" Text="// CACHE" />
+                        <TextBlock Grid.Column="1" Classes="label mono" Text="{Binding CacheTotalText}" HorizontalAlignment="Right" />
+                    </Grid>
+
+                    <c:HudFrame Classes="panel" Padding="16,10">
+                        <Panel>
+                            <ScrollViewer>
+                                <ItemsControl ItemsSource="{Binding CacheItems}">
+                                    <ItemsControl.ItemTemplate>
+                                        <DataTemplate x:DataType="vm:CacheItemViewModel">
+                                            <Grid ColumnDefinitions="Auto,*,Auto" Margin="0,4" ToolTip.Tip="{Binding Description}">
+                                                <CheckBox IsChecked="{Binding IsSelected}" VerticalAlignment="Top" />
+                                                <StackPanel Grid.Column="1" Margin="2,6,8,0">
+                                                    <TextBlock Text="{Binding Name}" />
+                                                    <TextBlock Classes="label" Text="{Binding Scope}" />
+                                                </StackPanel>
+                                                <TextBlock Grid.Column="2" Classes="mono" Text="{Binding SizeText}" Margin="0,6,0,0" />
+                                            </Grid>
+                                        </DataTemplate>
+                                    </ItemsControl.ItemTemplate>
+                                </ItemsControl>
+                            </ScrollViewer>
+                            <TextBlock Classes="dim" Text="Nothing to clean." IsVisible="{Binding !HasCacheItems}" />
+                        </Panel>
+                    </c:HudFrame>
+                </DockPanel>
+            </Grid>
+
+            <!-- Log -->
+            <c:HudFrame Grid.Row="2" Classes="panel" Height="160" Margin="0,18,0,0" Padding="16,10">
+                <DockPanel>
+                    <Grid DockPanel.Dock="Top" ColumnDefinitions="*,Auto" Margin="0,0,0,6">
+                        <TextBlock Classes="section" Text="// MISSION LOG" VerticalAlignment="Center" />
+                        <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="8">
+                            <Button Classes="hud small" Content="COPY" Command="{Binding CopyLogCommand}" />
+                            <Button Classes="hud small" Content="OPEN FILE" Command="{Binding OpenLogFileCommand}" />
+                        </StackPanel>
+                    </Grid>
+                    <ScrollViewer x:Name="LogScroll">
+                        <ItemsControl ItemsSource="{Binding LogEntries}">
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate x:DataType="vm:LogEntryViewModel">
+                                    <Grid ColumnDefinitions="Auto,*">
+                                        <TextBlock Classes="mono dim" Text="{Binding TimeText}" Margin="0,0,12,0" />
+                                        <TextBlock Grid.Column="1" Classes="mono" Text="{Binding Message}"
+                                                   Foreground="{Binding Brush}" TextWrapping="Wrap" />
+                                    </Grid>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+                    </ScrollViewer>
+                </DockPanel>
+            </c:HudFrame>
+
+            <!-- Fan-project notice: required by the Fankit FAQ, kept at normal size -->
+            <TextBlock Grid.Row="3" Classes="dim" Text="{Binding Disclaimer}" TextWrapping="Wrap" Margin="2,10,0,0" />
+        </Grid>
+
+        <!-- Overlays: setup, about, confirmations -->
+        <Border Background="{x:Static t:Hud.OverlayBrush}" IsVisible="{Binding Overlay, Converter={x:Static ObjectConverters.IsNotNull}}">
+            <ScrollViewer>
+                <ContentControl Content="{Binding Overlay}" HorizontalAlignment="Center" VerticalAlignment="Center" Margin="24" />
+            </ScrollViewer>
+        </Border>
+    </Grid>
+</Window>

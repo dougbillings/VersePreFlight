@@ -1,0 +1,80 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:VersePreflight.App.ViewModels"
+             xmlns:c="using:VersePreflight.App.Controls"
+             xmlns:t="using:VersePreflight.App.Theme"
+             x:Class="VersePreflight.App.Views.SetupView"
+             x:DataType="vm:SetupViewModel">
+    <c:HudFrame Classes="panel" Width="760" Padding="28,22">
+        <StackPanel Spacing="14">
+            <TextBlock Classes="section" Text="{Binding Title}" />
+
+            <!-- First run: the fan-project notice must be read and acknowledged -->
+            <c:HudFrame Cut="8" Stroke="{x:Static t:Hud.WarnBrush}" Padding="16,12" IsVisible="{Binding IsFirstRun}">
+                <StackPanel Spacing="8">
+                    <TextBlock Text="{Binding Disclaimer}" TextWrapping="Wrap" LineHeight="21" />
+                    <TextBlock Classes="dim" Text="{Binding TrademarkNotice}" TextWrapping="Wrap" />
+                    <TextBlock Classes="dim" TextWrapping="Wrap"
+                               Text="Verse Preflight changes folders in your game install (folder links, caches and, if you enable it, StarStrings). It never modifies the game's executables or Data.p4k." />
+                    <CheckBox IsChecked="{Binding DisclaimerAccepted}" Content="I understand this is an unofficial, fan-made tool." />
+                </StackPanel>
+            </c:HudFrame>
+
+            <!-- Game folder -->
+            <StackPanel Spacing="6">
+                <TextBlock Classes="label" Text="GAME FOLDER" />
+                <Grid ColumnDefinitions="*,Auto" ColumnSpacing="10">
+                    <TextBox Text="{Binding GameBase}" PlaceholderText="...\Roberts Space Industries\StarCitizen" />
+                    <Button Grid.Column="1" Classes="hud" Content="BROWSE" Command="{Binding BrowseGameBaseCommand}" />
+                </Grid>
+                <TextBlock Classes="mono" Text="{Binding GameBaseHint}" Foreground="{Binding GameBaseHintBrush}" TextWrapping="Wrap" />
+            </StackPanel>
+
+            <!-- Link folder -->
+            <StackPanel Spacing="6">
+                <TextBlock Classes="label" Text="LINK FOLDER" />
+                <TextBlock Classes="dim" TextWrapping="Wrap"
+                           Text="Where your linked folders are kept. A cloud-synced folder shares them between PCs." />
+                <Grid ColumnDefinitions="*,Auto" ColumnSpacing="10">
+                    <TextBox Text="{Binding LinkRoot}" />
+                    <Button Grid.Column="1" Classes="hud" Content="BROWSE" Command="{Binding BrowseLinkRootCommand}" />
+                </Grid>
+                <TextBlock Classes="mono dim" Text="{Binding LinkRootHint}" TextWrapping="Wrap" />
+            </StackPanel>
+
+            <!-- Folders to link -->
+            <StackPanel Spacing="2">
+                <TextBlock Classes="label" Text="FOLDERS TO LINK" />
+                <ItemsControl ItemsSource="{Binding Links}">
+                    <ItemsControl.ItemTemplate>
+                        <DataTemplate x:DataType="vm:LinkToggleViewModel">
+                            <CheckBox IsChecked="{Binding Enabled}">
+                                <StackPanel Orientation="Horizontal" Spacing="12">
+                                    <TextBlock Text="{Binding Name}" />
+                                    <TextBlock Classes="mono dim" Text="{Binding SourceSubPath}" />
+                                </StackPanel>
+                            </CheckBox>
+                        </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                </ItemsControl>
+            </StackPanel>
+
+            <!-- StarStrings: opt-in third-party content -->
+            <StackPanel Spacing="4">
+                <TextBlock Classes="label" Text="STARSTRINGS (OPTIONAL)" />
+                <TextBlock Classes="dim" Text="{Binding StarStringsCredit}" TextWrapping="Wrap" />
+                <CheckBox IsChecked="{Binding StarStringsEnabled}" Content="Install and update StarStrings" />
+                <CheckBox IsChecked="{Binding StarStringsIncludePtu}" IsEnabled="{Binding StarStringsEnabled}"
+                          Content="Also on PTU (PTU strings often lag new builds)" />
+                <Button Classes="hud small" Content="VIEW STARSTRINGS ON GITHUB" Command="{Binding OpenStarStringsCommand}"
+                        HorizontalAlignment="Left" Margin="0,4,0,0" />
+            </StackPanel>
+
+            <StackPanel Orientation="Horizontal" Spacing="10" HorizontalAlignment="Right" Margin="0,6,0,0">
+                <Button Classes="hud" Content="CANCEL" Command="{Binding CancelCommand}" IsVisible="{Binding CanCancel}" MinWidth="120" />
+                <Button Classes="hud primary" Content="SAVE" Command="{Binding SaveCommand}" IsEnabled="{Binding CanSave}"
+                        MinWidth="180" MinHeight="46" FontSize="14" />
+            </StackPanel>
+        </StackPanel>
+    </c:HudFrame>
+</UserControl>

@@ -1,0 +1,148 @@
+<Styles xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:c="using:VersePreflight.App.Controls"
+        xmlns:t="using:VersePreflight.App.Theme">
+
+    <!-- Text: base colour/size are set on the Window and inherited, so buttons can override them -->
+    <Style Selector="Window">
+        <Setter Property="Foreground" Value="{x:Static t:Hud.TextBrush}" />
+        <Setter Property="FontSize" Value="14" />
+    </Style>
+    <Style Selector="TextBlock.title">
+        <Setter Property="FontSize" Value="22" />
+        <Setter Property="FontWeight" Value="Bold" />
+        <Setter Property="LetterSpacing" Value="5" />
+        <Setter Property="Foreground" Value="{x:Static t:Hud.AccentBrush}" />
+    </Style>
+    <Style Selector="TextBlock.section">
+        <Setter Property="FontSize" Value="13" />
+        <Setter Property="FontWeight" Value="Bold" />
+        <Setter Property="LetterSpacing" Value="3" />
+        <Setter Property="Foreground" Value="{x:Static t:Hud.AccentBrush}" />
+    </Style>
+    <Style Selector="TextBlock.h2">
+        <Setter Property="FontSize" Value="18" />
+        <Setter Property="FontWeight" Value="Bold" />
+        <Setter Property="LetterSpacing" Value="3" />
+    </Style>
+    <Style Selector="TextBlock.label">
+        <Setter Property="FontSize" Value="12" />
+        <Setter Property="FontWeight" Value="SemiBold" />
+        <Setter Property="LetterSpacing" Value="2" />
+        <Setter Property="Foreground" Value="{x:Static t:Hud.TextDimBrush}" />
+    </Style>
+    <Style Selector="TextBlock.dim">
+        <Setter Property="Foreground" Value="{x:Static t:Hud.TextDimBrush}" />
+    </Style>
+    <Style Selector="TextBlock.mono">
+        <Setter Property="FontFamily" Value="{x:Static t:Hud.MonoFont}" />
+        <Setter Property="FontSize" Value="13" />
+    </Style>
+    <Style Selector="TextBlock.chip">
+        <Setter Property="FontSize" Value="11" />
+        <Setter Property="FontWeight" Value="Bold" />
+        <Setter Property="LetterSpacing" Value="2" />
+    </Style>
+
+    <!-- Panels -->
+    <Style Selector="c|HudFrame.panel">
+        <Setter Property="Fill" Value="{x:Static t:Hud.PanelBrush}" />
+        <Setter Property="Stroke" Value="{x:Static t:Hud.LineBrush}" />
+        <Setter Property="Accent" Value="{x:Static t:Hud.AccentBrush}" />
+        <Setter Property="Cut" Value="14" />
+    </Style>
+
+    <!-- Status chip: a thin outlined tag -->
+    <Style Selector="Border.chip">
+        <Setter Property="BorderThickness" Value="1" />
+        <Setter Property="Padding" Value="8,2" />
+        <Setter Property="MinWidth" Value="104" />
+        <Setter Property="VerticalAlignment" Value="Center" />
+    </Style>
+
+    <!-- Buttons: chamfered, outlined, large enough for touch -->
+    <Style Selector="Button.hud">
+        <Setter Property="Background" Value="{x:Static t:Hud.ButtonBrush}" />
+        <Setter Property="BorderBrush" Value="{x:Static t:Hud.AccentDimBrush}" />
+        <Setter Property="Foreground" Value="{x:Static t:Hud.TextBrush}" />
+        <Setter Property="FontWeight" Value="SemiBold" />
+        <Setter Property="FontSize" Value="14" />
+        <Setter Property="Padding" Value="18,10" />
+        <Setter Property="MinHeight" Value="46" />
+        <Setter Property="HorizontalContentAlignment" Value="Center" />
+        <Setter Property="VerticalContentAlignment" Value="Center" />
+        <Setter Property="Cursor" Value="Hand" />
+        <Setter Property="Template">
+            <ControlTemplate>
+                <c:HudFrame Cut="9"
+                            Fill="{TemplateBinding Background}"
+                            Stroke="{TemplateBinding BorderBrush}"
+                            StrokeThickness="1.5"
+                            Padding="{TemplateBinding Padding}">
+                    <ContentPresenter Content="{TemplateBinding Content}"
+                                      ContentTemplate="{TemplateBinding ContentTemplate}"
+                                      HorizontalContentAlignment="{TemplateBinding HorizontalContentAlignment}"
+                                      VerticalContentAlignment="{TemplateBinding VerticalContentAlignment}" />
+                </c:HudFrame>
+            </ControlTemplate>
+        </Setter>
+    </Style>
+    <Style Selector="Button.hud:pointerover">
+        <Setter Property="Background" Value="{x:Static t:Hud.ButtonHoverBrush}" />
+        <Setter Property="BorderBrush" Value="{x:Static t:Hud.AccentBrush}" />
+    </Style>
+    <Style Selector="Button.hud:focus-visible">
+        <Setter Property="BorderBrush" Value="{x:Static t:Hud.AccentBrightBrush}" />
+        <Setter Property="Background" Value="{x:Static t:Hud.ButtonHoverBrush}" />
+    </Style>
+    <Style Selector="Button.hud:pressed">
+        <Setter Property="RenderTransform" Value="scale(0.98)" />
+    </Style>
+    <Style Selector="Button.hud:disabled">
+        <Setter Property="Opacity" Value="0.4" />
+    </Style>
+
+    <Style Selector="Button.primary">
+        <Setter Property="Background" Value="{x:Static t:Hud.AccentBrush}" />
+        <Setter Property="BorderBrush" Value="{x:Static t:Hud.AccentBrightBrush}" />
+        <Setter Property="Foreground" Value="{x:Static t:Hud.Bg0Brush}" />
+        <Setter Property="FontSize" Value="18" />
+        <Setter Property="FontWeight" Value="Bold" />
+        <Setter Property="MinHeight" Value="62" />
+    </Style>
+    <Style Selector="Button.primary:pointerover, Button.primary:focus-visible">
+        <Setter Property="Background" Value="{x:Static t:Hud.AccentBrightBrush}" />
+        <Setter Property="BorderBrush" Value="{x:Static t:Hud.TextBrush}" />
+    </Style>
+
+    <Style Selector="Button.danger">
+        <Setter Property="BorderBrush" Value="#7A2B35" />
+    </Style>
+    <Style Selector="Button.danger:pointerover, Button.danger:focus-visible">
+        <Setter Property="BorderBrush" Value="{x:Static t:Hud.BadBrush}" />
+    </Style>
+
+    <Style Selector="Button.small">
+        <Setter Property="MinHeight" Value="34" />
+        <Setter Property="Padding" Value="12,4" />
+        <Setter Property="FontSize" Value="12" />
+    </Style>
+
+    <!-- Inputs -->
+    <Style Selector="TextBox">
+        <Setter Property="FontFamily" Value="{x:Static t:Hud.MonoFont}" />
+        <Setter Property="MinHeight" Value="40" />
+        <Setter Property="VerticalContentAlignment" Value="Center" />
+    </Style>
+    <Style Selector="CheckBox">
+        <Setter Property="MinHeight" Value="36" />
+        <Setter Property="Foreground" Value="{x:Static t:Hud.TextBrush}" />
+    </Style>
+
+    <Style Selector="ProgressBar.busy">
+        <Setter Property="Foreground" Value="{x:Static t:Hud.AccentBrush}" />
+        <Setter Property="Background" Value="Transparent" />
+        <Setter Property="MinHeight" Value="3" />
+        <Setter Property="Height" Value="3" />
+    </Style>
+</Styles>

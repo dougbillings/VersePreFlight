@@ -1,0 +1,35 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:VersePreflight.App.ViewModels"
+             xmlns:v="using:VersePreflight.App.Views"
+             xmlns:c="using:VersePreflight.App.Controls"
+             x:Class="VersePreflight.App.Views.AboutView"
+             x:DataType="vm:AboutViewModel">
+    <c:HudFrame Classes="panel" Width="640" Padding="28,24">
+        <StackPanel Spacing="16">
+            <StackPanel Orientation="Horizontal" Spacing="14">
+                <v:LogoMark Width="48" Height="48" />
+                <StackPanel VerticalAlignment="Center">
+                    <TextBlock Classes="title" Text="{Binding Name}" />
+                    <TextBlock Classes="dim" Text="{Binding Version}" />
+                </StackPanel>
+            </StackPanel>
+
+            <TextBlock Text="{Binding Disclaimer}" TextWrapping="Wrap" LineHeight="21" />
+            <TextBlock Classes="dim" Text="{Binding TrademarkNotice}" TextWrapping="Wrap" LineHeight="21" />
+
+            <StackPanel Spacing="6">
+                <TextBlock Classes="section" Text="// CREDITS" />
+                <TextBlock Text="{Binding StarStringsCredit}" TextWrapping="Wrap" LineHeight="21" />
+            </StackPanel>
+
+            <WrapPanel ItemSpacing="10" LineSpacing="10">
+                <Button Classes="hud small" Content="OFFICIAL SITE" Command="{Binding OpenOfficialSiteCommand}" />
+                <Button Classes="hud small" Content="SOURCE CODE" Command="{Binding OpenRepositoryCommand}" />
+                <Button Classes="hud small" Content="STARSTRINGS BY MRKRAKEN" Command="{Binding OpenStarStringsCommand}" />
+            </WrapPanel>
+
+            <Button Classes="hud" Content="CLOSE" Command="{Binding CloseCommand}" HorizontalAlignment="Right" MinWidth="140" />
+        </StackPanel>
+    </c:HudFrame>
+</UserControl>

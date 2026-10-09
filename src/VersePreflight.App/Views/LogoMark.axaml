@@ -1,0 +1,15 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:t="using:VersePreflight.App.Theme"
+             x:Class="VersePreflight.App.Views.LogoMark">
+    <!-- Verse Preflight's own mark: a diamond frame with a launch chevron -->
+    <Viewbox>
+        <Canvas Width="40" Height="40">
+            <Path Data="M20,1 L39,20 L20,39 L1,20 Z" Stroke="{x:Static t:Hud.AccentDimBrush}" StrokeThickness="1.5" />
+            <Path Data="M20,6 L34,20 L20,34 L6,20 Z" Stroke="{x:Static t:Hud.AccentBrush}" StrokeThickness="1.5" />
+            <Path Data="M12,24 L20,15 L28,24" Stroke="{x:Static t:Hud.AccentBrightBrush}" StrokeThickness="3"
+                  StrokeLineCap="Square" />
+            <Rectangle Canvas.Left="18.5" Canvas.Top="26" Width="3" Height="3" Fill="{x:Static t:Hud.AccentBrightBrush}" />
+        </Canvas>
+    </Viewbox>
+</UserControl>

@@ -32,6 +32,8 @@ public static class AppInfo
 
     public const string OfficialSiteUrl = "https://robertsspaceindustries.com";
 
+    public const string RepositoryUrl = "https://github.com/dougbillings/VersePreFlight";
+
     public const string StarStringsCredit =
         "StarStrings is a community-made (unofficial) string replacement pack by MrKraken. " +
         "Verse Preflight downloads it directly from the author's GitHub releases.";

@@ -1,0 +1,18 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:VersePreflight.App.ViewModels"
+             xmlns:c="using:VersePreflight.App.Controls"
+             x:Class="VersePreflight.App.Views.ConfirmView"
+             x:DataType="vm:ConfirmViewModel">
+    <c:HudFrame Classes="panel" Width="560" Padding="26,22">
+        <StackPanel Spacing="18">
+            <TextBlock Classes="section" Text="{Binding Title}" />
+            <TextBlock Text="{Binding Message}" TextWrapping="Wrap" LineHeight="21" />
+            <StackPanel Orientation="Horizontal" Spacing="10" HorizontalAlignment="Right">
+                <Button Classes="hud" Content="CANCEL" Command="{Binding CancelCommand}" MinWidth="120" />
+                <Button Classes="hud primary" Content="{Binding ConfirmText}" Command="{Binding ConfirmCommand}"
+                        MinWidth="180" MinHeight="46" FontSize="14" />
+            </StackPanel>
+        </StackPanel>
+    </c:HudFrame>
+</UserControl>

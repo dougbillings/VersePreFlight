@@ -1,5 +1,6 @@
 <Solution>
   <Folder Name="/src/">
+    <Project Path="src/VersePreflight.App/VersePreflight.App.csproj" />
     <Project Path="src/VersePreflight.Core/VersePreflight.Core.csproj" />
   </Folder>
   <Folder Name="/tests/">

@@ -23,8 +23,8 @@ running game, and collects no data.
 
 Early development. Planned milestones:
 
-1. **Core library** (in progress): all features, with automated tests on Windows and Linux.
-2. **Desktop app** (Avalonia) and the first public Windows release.
+1. **Core library** (done): all features, with automated tests on Windows and Linux.
+2. **Desktop app** (Avalonia, in progress) and the first public Windows release.
 3. **Linux support** for Wine/Proton installs.
 
 Until the first release, there is nothing to download yet.
@@ -35,6 +35,7 @@ Requires the [.NET 10 SDK](https://dotnet.microsoft.com/download).
 
 ```sh
 dotnet test
+dotnet run --project src/VersePreflight.App
 ```
 
 ## Credits

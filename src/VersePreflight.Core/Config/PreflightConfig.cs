@@ -22,6 +22,9 @@ public sealed class PreflightConfig
 
     /// <summary>PTU strings often lag new builds, so PTU installs need a separate opt-in.</summary>
     public bool StarStringsIncludePtu { get; set; }
+
+    /// <summary>Last StarStrings release installed per environment (e.g. "LIVE" -> release name).</summary>
+    public Dictionary<string, string> StarStringsInstalled { get; set; } = new(StringComparer.OrdinalIgnoreCase);
 }
 
 [JsonSourceGenerationOptions(WriteIndented = true, PropertyNamingPolicy = JsonKnownNamingPolicy.CamelCase)]
