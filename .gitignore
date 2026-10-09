@@ -480,3 +480,6 @@ $RECYCLE.BIN/
 
 # Vim temporary swap files
 *.swp
+
+# Release publish profile used by the release workflow
+!src/VersePreflight.App/Properties/PublishProfiles/win-x64.pubxml
