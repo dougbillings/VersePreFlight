@@ -170,6 +170,8 @@ public sealed class AccessoryLibrary : IDisposable
                 Specular = Try(() => textures.GetValueOrDefault("TexSlot4") is { } spec ? TextureReader.ReadRgba(ReadFile, DdsPath(spec), 1024).Channel(0) : null),
                 Detail = Try(() => detail?["File"] is { } file ? Cached(DdsPath(file), path => TextureReader.ReadRgba(ReadFile, path, 512)) : null),
                 DetailTiling = MaterialParams.Float(detailMod, "TileU", 1),
+                SourceAverageColor = MaterialParams.Vector(p, "SourceAverageColor", Vector3.Zero),
+                SourceDetail = MaterialParams.Float(p, "SourceDetail", 1),
                 Translucency = Try(() => textures.GetValueOrDefault("TexSlot12") is { } trans ? Cached(DdsPath(trans), path => TextureReader.ReadChannel(ReadFile, path, 512)) : null),
                 SpecularLevel = MaterialParams.Vector(material, "Specular", new Vector3(0.032f)).X,
                 DetailBumpScale = MaterialParams.Float(p, "DetailBumpScale", 1),

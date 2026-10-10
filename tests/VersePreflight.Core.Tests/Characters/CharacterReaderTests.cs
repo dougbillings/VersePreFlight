@@ -239,11 +239,4 @@ public class CharacterReaderTests
 
         Assert.Equal(new Vector3(5, 5, 5), lib.Blend(chf)[0]);
     }
-
-    [Fact]
-    public void Align_RemovesMeanOffset()
-    {
-        var aligned = HeadLibrary.Align([new(1, 1, 1), new(3, 1, 1)], [new(0, 0, 0), new(2, 0, 0)]);
-        Assert.Equal([new Vector3(0, 0, 0), new Vector3(2, 0, 0)], aligned);
-    }
 }

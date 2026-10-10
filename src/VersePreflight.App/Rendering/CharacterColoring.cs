@@ -12,19 +12,21 @@ public static class CharacterColoring
     public static Vector3[] Uniform(int count, Vector3 color) => Enumerable.Repeat(color, count).ToArray();
 
     /// <summary>
-    /// Linear multiplier that tones a skin texture so its average is the chosen skin colour, keeping the
-    /// texture's own detail. Measured against in-game shots, skin in the character booth shows about 20%
-    /// less saturated than the stored colour, so the target is desaturated to match. (The materials'
-    /// SourceAverageColor/FinalSkinTone calibration didn't match the shots.)
+    /// Linear multiplier that tones a skin texture to the chosen skin colour the way the game's skin shader
+    /// does: skin colour / the texture's SourceAverageColor (both linear). Textures authored lighter or
+    /// darker than their average keep that look. Falls back to the texture's mean when the material has none.
     /// </summary>
     public static Vector3 SkinTone(SkinMaterial material, Vector3 skinSrgb)
     {
         static float Lin(float v) => MathF.Pow(Math.Clamp(v, 0.001f, 1), 2.2f);
         var target = new Vector3(Lin(skinSrgb.X), Lin(skinSrgb.Y), Lin(skinSrgb.Z));
-        var luma = Vector3.Dot(target, new Vector3(0.2126f, 0.7152f, 0.0722f));
-        target = Vector3.Lerp(new Vector3(luma), target, 0.8f);
-        var mean = material.Diffuse.Mean();
-        return target / new Vector3(Lin(mean.X), Lin(mean.Y), Lin(mean.Z));
+        var source = material.SourceAverageColor;
+        if (source.X <= 0 || source.Y <= 0 || source.Z <= 0)
+        {
+            var mean = material.Diffuse.Mean();
+            source = new Vector3(Lin(mean.X), Lin(mean.Y), Lin(mean.Z));
+        }
+        return target / source;
     }
 
     /// <summary>
@@ -180,7 +182,7 @@ public static class CharacterColoring
             return side.Aggregate(Vector3.Zero, (a, b) => a + b) / side.Length;
         }
         var leftCentre = Centre(true); var rightCentre = Centre(false);
-        var sclera = new Vector3(0.5f, 0.47f, 0.45f);
+        var sclera = new Vector3(0.40f, 0.38f, 0.36f);
         var pupil = new Vector3(0.02f, 0.02f, 0.02f);
         irisColor = Vector3.Min(Vector3.One, irisColor * 1.4f); // the game's iris shader shows the chosen colour brighter
         var ring = irisColor * 0.45f;
@@ -192,9 +194,9 @@ public static class CharacterColoring
             var dir = Vector3.Normalize(positions[i] - centre);
             colors[i] = dir.Y switch
             {
-                > 0.98f => pupil,
-                > 0.86f => irisColor,
-                > 0.82f => ring,
+                > 0.975f => pupil,
+                > 0.83f => irisColor,
+                > 0.79f => ring,
                 _ => sclera,
             };
         }

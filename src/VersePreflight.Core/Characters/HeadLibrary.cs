@@ -98,7 +98,7 @@ public sealed class BlendSet
 public sealed class HeadLibrary
 {
     private const string CacheMagic = "VPHEAD";
-    private const int CacheVersion = 3;
+    private const int CacheVersion = 4;
     private const string HeadsFolder = @"Data\Objects\Characters\Human\heads\";
 
     internal HeadLibrary(string name, uint bodyHash, BlendSet head, BlendSet? eyes)
@@ -140,17 +140,14 @@ public sealed class HeadLibrary
             var dna = HeadDnaFile.Parse(archive.Read(dnaEntry));
             if (Mesh(baseName + "_head.skinm") is not { } baseHead || baseHead.Positions.Length != dna.VertexCount) continue;
 
-            // Head presets, remembering each one's alignment offset so its eyes can move with it
+            // Head presets, used as stored: they're registered to the base head (their necks line up within
+            // about a millimetre), as the game's linear blend needs
             var headSlots = new Vector3[]?[dna.HeadSlots.Count];
-            var offsets = new Vector3?[dna.HeadSlots.Count];
             headSlots[0] = baseHead.Positions;
-            offsets[0] = Vector3.Zero;
             for (var i = 1; i < headSlots.Length; i++)
             {
                 if (Mesh(dna.HeadSlots[i] + "_head.skinm") is not { } mesh || mesh.Positions.Length != dna.VertexCount) continue;
-                var offset = MeanOffset(mesh.Positions, baseHead.Positions);
-                offsets[i] = offset;
-                headSlots[i] = mesh.Positions.Select(p => p - offset).ToArray();
+                headSlots[i] = mesh.Positions;
             }
             var head = new BlendSet(baseHead.Indices, headSlots, dna.Mask, dna.RegionCount, baseHead.Uvs);
 
@@ -163,9 +160,9 @@ public sealed class HeadLibrary
                 eyeSlots[0] = baseEyes.Positions;
                 for (var i = 1; i < eyeSlots.Length; i++)
                 {
-                    if (offsets[i] is not { } offset) continue; // head preset missing: eyes fall back to base
+                    if (headSlots[i] is null) continue; // head preset missing: eyes fall back to base
                     if (Mesh(dna.HeadSlots[i] + "_eyes.skinm") is not { } m || m.Positions.Length != baseEyes.Positions.Length) continue;
-                    eyeSlots[i] = m.Positions.Select(p => p - offset).ToArray(); // move with the preset's head
+                    eyeSlots[i] = m.Positions;
                 }
                 eyes = new BlendSet(baseEyes.Indices, eyeSlots, EyeMask(baseEyes.Positions, baseHead.Positions, dna), dna.RegionCount, baseEyes.Uvs);
             }
@@ -194,20 +191,6 @@ public sealed class HeadLibrary
             mask[region * eyes.Length + v] = 1;
         }
         return mask;
-    }
-
-    // Some presets are stored with a global offset; this is their mean offset from the base head
-    internal static Vector3 MeanOffset(Vector3[] head, Vector3[] baseHead)
-    {
-        var offset = Vector3.Zero;
-        for (var i = 0; i < head.Length; i++) offset += head[i] - baseHead[i];
-        return offset / head.Length;
-    }
-
-    internal static Vector3[] Align(Vector3[] head, Vector3[] baseHead)
-    {
-        var offset = MeanOffset(head, baseHead);
-        return head.Select(p => p - offset).ToArray();
     }
 
     public void Save(Stream stream)

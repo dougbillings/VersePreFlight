@@ -16,6 +16,14 @@ public sealed record SkinMaterial(ColorTexture Diffuse)
     public float DetailTiling { get; init; } = 1;
     public GrayTexture? Translucency { get; init; }
 
+    /// <summary>
+    /// The skin tone the texture was authored for (linear). The game's tone adjustment maps it to the chosen
+    /// skin colour, so textures meant to look lighter or darker keep that relationship.
+    /// </summary>
+    public Vector3 SourceAverageColor { get; init; }
+
+    /// <summary>How strongly the texture's own variation is kept when toning (an exponent; 1 = as authored).</summary>
+    public float SourceDetail { get; init; } = 1;
     public float SpecularLevel { get; init; } = 0.032f;
     public float DetailBumpScale { get; init; } = 1;
     public float DetailCavityScale { get; init; }

@@ -105,3 +105,28 @@ Prototype scripts (C# file-based apps, run with `dotnet run <file>.cs`). Paths p
   translucency), hair/caps lit per vertex and blended front to back with early exit, ACES tone mapping.
   Release timings on a 16-thread desktop: 70–210 ms for a 2× supersampled 1200×1440 frame. The viewer draws a
   capped-resolution frame while dragging and renders the full-quality one on a background thread.
+
+## Matching the in-game look with data (2026-10-10)
+
+Method: `overlay_vs_ingame.cs` renders each test character head-on and aligns it to the user's in-game shot by the
+pupils (in-game pupils at about (1311,711) and (1556,710) in the 3840×1600 shots, same booth camera for all), then
+compares colours at the same face points. `fit_booth_lighting.cs` renders each light component on its own in linear
+light and solves for intensities by least squares against the in-game patches (inverse of our ACES curve).
+
+- Skin tone: the game's formula (skin colour × texture ÷ the material's SourceAverageColor) fits best (RMS 12.0
+  sRGB levels with any rig, vs 13.7 for "texture mean = skin colour"). It's why gomab (male04_t2, a texture authored
+  lighter than its SourceAverageColor) shows lighter in game. SourceDetail as a contrast exponent didn't help (12.7).
+- The .chf head material GUID is the customizer skin texture (DataCore record; byte order differs from StarBreaker's
+  display); the head material also carries freckles, sun spots, makeup and tattoo parameters (StarBreaker `chf to-json`
+  names them).
+- Booth lighting, fitted with white lights + one colour balance (RMS 11.2): large softbox on the right (az 60–90°,
+  el −30…30°), small light above the camera, faint left fill, soft light from below, skin highlights ~6× a single
+  GGX lobe (a broad sheen), and a cool balance (R 0.75, G 1, B 1.14). Free per-channel light colours fit a little
+  better (9.8) but gave unnatural greenish skin, so they were rejected.
+- Preset heads are already registered to the base head (necks within ~1 mm); the old mean-offset alignment moved
+  them by up to 5 mm, so they're now used as stored.
+- Lips: our lower lips read fuller than in game. With the eyes aligned, the mouth is in the right place; in plain
+  geometry the lips are closed but full, and the DNA mouth region maps correctly (MOUTH_C = chf Mouth). The DNA file
+  also holds a full facial rig (≈179 joints with per-preset data, "FACIAL_C_FacialRoot", ~48 MB of expression /
+  pose-space shapes "BS_CTL_PSD", interleaved per region). The in-game difference most likely comes from that rig or
+  the booth's idle expression; decoding it would be a sizeable reverse-engineering job.

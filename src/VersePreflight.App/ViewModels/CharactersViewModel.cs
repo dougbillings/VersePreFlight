@@ -149,7 +149,7 @@ public sealed partial class CharactersViewModel(PreflightLog log, IUiServices ui
         {
             var eyes = eyesSet.Blend(character);
             var iris = character.EyeColor?.ToVector() ?? new Vector3(0.35f, 0.25f, 0.15f);
-            parts.Add(new MeshPart(eyes, eyesSet.Indices, CharacterColoring.Eyes(eyes, iris), new PlainSurface(Roughness: 0.12f) { AmbientOcclusion = 0.55f }));
+            parts.Add(new MeshPart(eyes, eyesSet.Indices, CharacterColoring.Eyes(eyes, iris), new PlainSurface(Roughness: 0.12f) { AmbientOcclusion = 0.35f }));
         }
         if (accessories is null) return parts;
 

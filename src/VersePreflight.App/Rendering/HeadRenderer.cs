@@ -13,7 +13,6 @@ public sealed class HeadRenderer
 {
     private const float NearZ = 0.01f;
     private const int NoHit = -1;
-    private const int LightCount = 3;
     private const int BandRows = 8;
 
     private static readonly float[] SrgbToLinearLut = Enumerable.Range(0, 1024).Select(i => MathF.Pow(i / 1023f, 2.2f)).ToArray();
@@ -53,10 +52,11 @@ public sealed class HeadRenderer
     }
 
     /// <summary>Camera and lights for one frame; light directions point towards the light.</summary>
-    private sealed record Frame(Vector3 Camera, Vector3 Up, Vector3[] LightDirs, Vector3[] LightColors, Vector3 Sky, Vector3 Ground)
+    private sealed record Frame(Vector3 Camera, Vector3 Up, Vector3[] LightDirs, Vector3[] LightColors, Vector3 Sky, Vector3 Ground, HeadLighting Lighting)
     {
-        public Vector3 RimDir => LightDirs[2];
-        public Vector3 RimColor => LightColors[2];
+        public float Diffuse => Lighting.Diffuse;
+        public float Specular => Lighting.Specular;
+        public float Reflection => Lighting.Reflection;
     }
 
     private readonly record struct Fragment(int Part, int Triangle, float Lod, float Boost);
@@ -73,6 +73,9 @@ public sealed class HeadRenderer
     private float[] _blendedKeys = [];
 
     public bool HasMesh => _parts.Length > 0;
+
+    /// <summary>The lights and output settings.</summary>
+    public HeadLighting Lighting { get; set; } = new();
 
     /// <summary>
     /// Sets what to draw. The first part frames the camera (Z-up, face looking towards +Y, as in the game files).
@@ -118,16 +121,20 @@ public sealed class HeadRenderer
         var up = Vector3.Cross(right, f);
         var focal = height / (2 * MathF.Tan(fov / 2));
 
-        // Studio lights fixed around the camera, after the in-game character booth: a neutral key from the
-        // right side, a faint cool fill from the left, a blue rim from behind on the left, and a dim blue sky.
-        // Calibrated against in-game shots, where skin facing the camera shows a little darker than the
-        // character's stored skin colour.
+        // Studio lights fixed around the camera: a key from the right side, a fill from the left, a rim from
+        // behind on the left, and soft light from all around (see HeadLighting)
+        var l = Lighting;
         var frame = new Frame(camera, up,
-            [Vector3.Normalize(-f * 0.35f + right * 0.9f + up * 0.3f), Vector3.Normalize(-f * 0.4f - right * 0.9f + up * 0.1f), Vector3.Normalize(f * 0.6f - right * 0.75f + up * 0.25f)],
-            [new Vector3(0.9f, 0.95f, 1.04f), new Vector3(0.05f, 0.075f, 0.12f), new Vector3(0.2f, 0.45f, 0.75f)],
-            Sky: new Vector3(0.05f, 0.065f, 0.095f), Ground: new Vector3(0.015f, 0.014f, 0.013f));
+            l.Lights.Select(light => Direction(light.Angles)).ToArray(), l.Lights.Select(light => light.Color).ToArray(), l.Sky, l.Ground, l);
 
         foreach (var part in _parts) Project(part, camera, f, right, up, focal, width, height);
+
+        // Towards a light at an azimuth (degrees, + to the camera's right, 0 = from the camera) and elevation
+        Vector3 Direction(Vector2 angles)
+        {
+            float az = angles.X * MathF.PI / 180, el = angles.Y * MathF.PI / 180;
+            return Vector3.Normalize(-f * (MathF.Cos(el) * MathF.Cos(az)) + right * (MathF.Cos(el) * MathF.Sin(az)) + up * MathF.Sin(el));
+        }
 
         // Opaque: find the nearest triangle per pixel, then shade every pixel once
         var opaque = Enumerable.Range(0, _parts.Length).Where(i => !_parts[i].Transparent).ToArray();
@@ -327,7 +334,9 @@ public sealed class HeadRenderer
         var ng = Vector3.Normalize(Mix(part.Normals, a, b, c, w));
         var lod = part.TextureLod - 0.5f; // slightly sharp
 
-        var albedo = SrgbToLinear(Level(skin.Diffuse, lod).Sample3(uv.X, uv.Y)) * skin.Tone;
+        var albedo = SrgbToLinear(Level(skin.Diffuse, lod).Sample3(uv.X, uv.Y));
+        if (skin.Contrast != 1) albedo = new Vector3(MathF.Pow(albedo.X, skin.Contrast), MathF.Pow(albedo.Y, skin.Contrast), MathF.Pow(albedo.Z, skin.Contrast));
+        albedo *= skin.Tone;
 
         // Tangent-space normal: the head's normal map plus tiled pore detail (green points up the texture)
         float nx = 0, ny = 0, gloss = 0.45f;
@@ -368,29 +377,32 @@ public sealed class HeadRenderer
         var ndv = MathF.Max(1e-3f, Vector3.Dot(normal, view));
         var diffuse = Hemisphere(normal, f) * 0.9f;
         var specular = Vector3.Zero;
-        for (var k = 0; k < LightCount; k++)
+        for (var k = 0; k < f.LightDirs.Length; k++)
         {
             var dir = f.LightDirs[k]; var color = f.LightColors[k];
             var ndl = Vector3.Dot(normal, dir);
             var ndlSoft = Vector3.Dot(soft, dir);
             diffuse += color * new Vector3(Wrap(ndlSoft, 0.3f), Wrap(ndl, 0.12f), Wrap(ndl, 0.08f));
             // Two specular lobes, as skin has an oily layer over a rougher one (the faint fill adds none)
-            if (ndl > 0 && k != 1) specular += color * Ggx2(normal, view, dir, ndl, ndv, roughness, MathF.Min(1, roughness * 1.5f), reflectance);
+            if (ndl > 0) specular += color * (f.Specular * f.Lighting.SkinHighlights * Ggx2(normal, view, dir, ndl, ndv, roughness, MathF.Min(1, roughness * 1.5f), reflectance));
         }
 
         // Reflection of the surroundings, strongest at grazing angles
-        var fresnel = reflectance + (1 - reflectance) * Pow5(1 - ndv) * (1 - roughness) * 0.6f;
-        specular += Hemisphere(Vector3.Reflect(-view, normal), f) * fresnel;
+        var fresnel = reflectance + (1 - reflectance) * Pow5(1 - ndv) * (1 - roughness) * 0.25f;
+        specular += Surroundings(Vector3.Reflect(-view, normal), f) * (fresnel * f.Reflection);
 
         // Thin areas (ears, nostrils) glow when lit from behind
         var transmitted = Vector3.Zero;
         if (skin.Translucency is { } trans && m.TranslucencyMultiplier > 0)
         {
             var thin = Level(trans, lod).Sample1(uv.X, uv.Y) * m.TranslucencyMultiplier;
-            var back = MathF.Max(0, Vector3.Dot(-view, f.RimDir));
-            transmitted = new Vector3(1f, 0.3f, 0.15f) * f.RimColor * (thin * back * back * 0.35f) * Vector3.SquareRoot(albedo) * 2;
+            for (var k = 0; k < f.LightDirs.Length; k++)
+            {
+                var back = MathF.Max(0, Vector3.Dot(-view, f.LightDirs[k]));
+                transmitted += new Vector3(1f, 0.3f, 0.15f) * f.LightColors[k] * (thin * back * back * 0.35f) * Vector3.SquareRoot(albedo) * 2;
+            }
         }
-        return (albedo * diffuse + specular) * occlusion + transmitted;
+        return (albedo * diffuse * f.Diffuse + specular) * occlusion + transmitted * f.Diffuse;
     }
 
     private static Vector3 ShadePlain(Prepared part, PlainSurface plain, int a, int b, int c, Vector3 w, Frame f)
@@ -402,17 +414,17 @@ public sealed class HeadRenderer
         var ndv = MathF.Max(1e-3f, Vector3.Dot(normal, view));
         var diffuse = Hemisphere(normal, f) * plain.AmbientOcclusion;
         var specular = Vector3.Zero;
-        for (var k = 0; k < LightCount; k++)
+        for (var k = 0; k < f.LightDirs.Length; k++)
         {
             var dir = f.LightDirs[k]; var color = f.LightColors[k];
             var ndl = Vector3.Dot(normal, dir);
             if (ndl <= 0) continue;
             diffuse += color * ndl * plain.AmbientOcclusion;
-            specular += color * Ggx(normal, view, dir, ndl, ndv, plain.Roughness, plain.Reflectance);
+            specular += color * (f.Specular * Ggx(normal, view, dir, ndl, ndv, plain.Roughness, plain.Reflectance));
         }
         var fresnel = plain.Reflectance + (1 - plain.Reflectance) * Pow5(1 - ndv) * (1 - plain.Roughness);
-        specular += Hemisphere(Vector3.Reflect(-view, normal), f) * fresnel * plain.AmbientOcclusion;
-        return albedo * diffuse + specular;
+        specular += Surroundings(Vector3.Reflect(-view, normal), f) * (fresnel * plain.AmbientOcclusion * f.Reflection);
+        return albedo * diffuse * f.Diffuse + specular;
     }
 
     // ---------- Blended parts (hair caps and strands) ----------
@@ -532,7 +544,7 @@ public sealed class HeadRenderer
         var tint = Vector3.SquareRoot(baseColor);
         var diffuse = Hemisphere(normal, f) * 0.8f;
         var specular = Vector3.Zero;
-        for (var k = 0; k < LightCount; k++)
+        for (var k = 0; k < f.LightDirs.Length; k++)
         {
             var dir = f.LightDirs[k]; var color = f.LightColors[k];
             var tl = Vector3.Dot(tangent, dir);
@@ -548,15 +560,15 @@ public sealed class HeadRenderer
             through *= through; through *= through * through;
             specular += color * tint * (through * 0.15f);
         }
-        return (baseColor * diffuse + specular) * occlusion;
+        return (baseColor * diffuse * f.Diffuse + specular * f.Specular) * occlusion;
     }
 
     private static Vector3 ShadeCap(Prepared part, int i, Frame f)
     {
         var normal = part.Normals[i];
         var light = Hemisphere(normal, f) * 0.6f;
-        for (var k = 0; k < LightCount; k++) light += f.LightColors[k] * Wrap(Vector3.Dot(normal, f.LightDirs[k]), 0.2f) * 0.7f;
-        return part.Linear[i] * light;
+        for (var k = 0; k < f.LightDirs.Length; k++) light += f.LightColors[k] * Wrap(Vector3.Dot(normal, f.LightDirs[k]), 0.2f) * 0.7f;
+        return part.Linear[i] * light * f.Diffuse;
     }
 
     // ---------- Lighting helpers ----------
@@ -564,6 +576,11 @@ public sealed class HeadRenderer
     /// <summary>Soft light from all around: sky above, ground bounce below.</summary>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private static Vector3 Hemisphere(Vector3 direction, Frame f) => Vector3.Lerp(f.Ground, f.Sky, Vector3.Dot(direction, f.Up) * 0.5f + 0.5f);
+
+    /// <summary>The surroundings seen in a reflection.</summary>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    private static Vector3 Surroundings(Vector3 direction, Frame f) =>
+        Vector3.Lerp(f.Lighting.ReflectionGround, f.Lighting.ReflectionSky, Vector3.Dot(direction, f.Up) * 0.5f + 0.5f);
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private static float Wrap(float ndl, float wrap) => MathF.Max(0, (ndl + wrap) / (1 + wrap));
@@ -618,6 +635,8 @@ public sealed class HeadRenderer
     /// <summary>Filmic tone mapping (ACES fit by K. Narkowicz), then sRGB, premultiplied by coverage.</summary>
     private void Resolve(uint[] pixels, int y, int width)
     {
+        var toneMap = Lighting.ToneMap;
+        var balance = Lighting.WhiteBalance * Lighting.Exposure;
         for (var x = 0; x < width; x++)
         {
             var o = (y * width + x) * 4;
@@ -627,9 +646,10 @@ public sealed class HeadRenderer
             var alpha = Math.Clamp(_hair[o + 3] + _color[o + 3] * under, 0, 1);
             if (alpha <= 0) { pixels[i] = 0; continue; }
             var inv = 1 / alpha;
-            var r = Tone((_hair[o] + _color[o] * under) * inv) * alpha;
-            var g = Tone((_hair[o + 1] + _color[o + 1] * under) * inv) * alpha;
-            var b = Tone((_hair[o + 2] + _color[o + 2] * under) * inv) * alpha;
+            float Out(float x, float scale) => toneMap ? Tone(x * scale) : Math.Clamp(x * scale, 0, 1);
+            var r = Out((_hair[o] + _color[o] * under) * inv, balance.X) * alpha;
+            var g = Out((_hair[o + 1] + _color[o + 1] * under) * inv, balance.Y) * alpha;
+            var b = Out((_hair[o + 2] + _color[o + 2] * under) * inv, balance.Z) * alpha;
             pixels[i] = (uint)(alpha * 255) << 24 | (uint)ToSrgb(r) << 16 | (uint)ToSrgb(g) << 8 | ToSrgb(b);
         }
     }
