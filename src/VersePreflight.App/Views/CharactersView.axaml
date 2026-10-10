@@ -1,0 +1,66 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:VersePreflight.App.ViewModels"
+             xmlns:c="using:VersePreflight.App.Controls"
+             xmlns:t="using:VersePreflight.App.Theme"
+             x:Class="VersePreflight.App.Views.CharactersView"
+             x:DataType="vm:CharactersViewModel">
+    <Grid ColumnDefinitions="300,20,*">
+
+        <!-- Character list -->
+        <DockPanel>
+            <Grid DockPanel.Dock="Top" ColumnDefinitions="*,Auto" Margin="0,0,0,10">
+                <TextBlock Classes="section" Text="// CHARACTERS" VerticalAlignment="Center" />
+                <Button Grid.Column="1" Classes="hud small" Content="OPEN FOLDER" Command="{Binding OpenFolderCommand}" />
+            </Grid>
+            <c:HudFrame Classes="panel" Padding="6">
+                <Panel>
+                    <ListBox ItemsSource="{Binding Characters}" SelectedItem="{Binding Selected}" Background="Transparent">
+                        <ListBox.ItemTemplate>
+                            <DataTemplate x:DataType="vm:CharacterItemViewModel">
+                                <StackPanel Margin="6,6">
+                                    <TextBlock Text="{Binding Name}" FontWeight="SemiBold" FontSize="15" />
+                                    <TextBlock Classes="label" Text="{Binding Details}" />
+                                </StackPanel>
+                            </DataTemplate>
+                        </ListBox.ItemTemplate>
+                    </ListBox>
+                    <TextBlock Classes="dim" Margin="10" TextWrapping="Wrap" IsVisible="{Binding !HasCharacters}"
+                               Text="No custom characters found yet." />
+                </Panel>
+            </c:HudFrame>
+        </DockPanel>
+
+        <!-- Viewer -->
+        <c:HudFrame Grid.Column="2" Classes="panel" Padding="18,14">
+            <Grid RowDefinitions="Auto,*,Auto">
+                <Grid ColumnDefinitions="*,Auto">
+                    <StackPanel>
+                        <TextBlock Classes="h2" Text="{Binding Title}" />
+                        <TextBlock Classes="label" Text="{Binding Subtitle}" />
+                    </StackPanel>
+                    <Border Grid.Column="1" Classes="chip" BorderBrush="{x:Static t:Hud.WarnBrush}" VerticalAlignment="Top"
+                            ToolTip.Tip="This viewer is an experiment and may not match the game exactly">
+                        <TextBlock Classes="chip" Text="EXPERIMENTAL" Foreground="{x:Static t:Hud.WarnBrush}" HorizontalAlignment="Center" />
+                    </Border>
+                </Grid>
+
+                <Panel Grid.Row="1" Margin="0,8">
+                    <c:HeadViewer x:Name="Viewer" Positions="{Binding Positions}" Indices="{Binding Indices}" />
+                    <StackPanel VerticalAlignment="Center" HorizontalAlignment="Center" Spacing="10" MaxWidth="420"
+                                IsVisible="{Binding !HasModel}">
+                        <ProgressBar Classes="busy" IsIndeterminate="True" Width="220" IsVisible="{Binding IsLoading}" />
+                        <TextBlock Classes="dim" Text="{Binding Message}" TextWrapping="Wrap" TextAlignment="Center" />
+                    </StackPanel>
+                    <ProgressBar Classes="busy" IsIndeterminate="True" VerticalAlignment="Top" IsVisible="{Binding IsLoading}" />
+                </Panel>
+
+                <Grid Grid.Row="2" ColumnDefinitions="*,Auto">
+                    <TextBlock Classes="dim" FontSize="12" TextWrapping="Wrap" VerticalAlignment="Center"
+                               Text="Head shape rebuilt from your own game files. Skin, eyes and hair aren't shown yet. Drag to rotate · scroll or pinch to zoom · double-tap to reset." />
+                    <Button Grid.Column="1" Classes="hud small" Content="RESET VIEW" Click="OnResetView" Margin="12,0,0,0" />
+                </Grid>
+            </Grid>
+        </c:HudFrame>
+    </Grid>
+</UserControl>

@@ -57,8 +57,17 @@
             <ProgressBar Grid.Row="0" Classes="busy" IsIndeterminate="True" IsVisible="{Binding IsBusy}"
                          VerticalAlignment="Bottom" Margin="0,0,0,-10" />
 
+            <!-- Pages -->
+            <DockPanel Grid.Row="1" Margin="0,16,0,0">
+            <StackPanel DockPanel.Dock="Top" Orientation="Horizontal" Spacing="8" Margin="0,0,0,14">
+                <Button Classes="hud tab" Classes.active="{Binding IsPreflightPage}" Content="PREFLIGHT" Command="{Binding ShowPreflightCommand}" />
+                <Button Classes="hud tab" Classes.active="{Binding IsCharactersPage}" Content="CHARACTERS" Command="{Binding ShowCharactersCommand}" />
+            </StackPanel>
+            <Panel>
+            <v:CharactersView DataContext="{Binding Characters}" IsVisible="{Binding $parent[Window].((vm:MainViewModel)DataContext).IsCharactersPage}" />
+
             <!-- Body -->
-            <Grid Grid.Row="1" ColumnDefinitions="*,20,380" Margin="0,22,0,0">
+            <Grid ColumnDefinitions="*,20,380" IsVisible="{Binding IsPreflightPage}">
 
                 <!-- Installs -->
                 <DockPanel>
@@ -172,6 +181,8 @@
                     </c:HudFrame>
                 </DockPanel>
             </Grid>
+            </Panel>
+            </DockPanel>
 
             <!-- Log -->
             <c:HudFrame Grid.Row="2" Classes="panel" Height="160" Margin="0,18,0,0" Padding="16,10">

@@ -65,9 +65,22 @@ public sealed partial class MainViewModel : ViewModelBase, IDisposable
         _starStrings = new StarStringsInstaller(new StarStringsClient(_http), log,
             Path.Combine(platform.DataDirectory, "StarStrings-backup"));
 
+        Characters = new CharactersViewModel(log, ui, Path.Combine(platform.DataDirectory, "cache"));
+
         _gameTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(3) };
         _gameTimer.Tick += async (_, _) => await CheckGameRunningAsync();
     }
+
+    public CharactersViewModel Characters { get; }
+
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(IsCharactersPage))]
+    public partial bool IsPreflightPage { get; set; } = true;
+
+    public bool IsCharactersPage => !IsPreflightPage;
+
+    [RelayCommand] private void ShowPreflight() => IsPreflightPage = true;
+    [RelayCommand] private void ShowCharacters() => IsPreflightPage = false;
 
     public ObservableCollection<EnvironmentViewModel> Environments { get; } = [];
     public ObservableCollection<CacheItemViewModel> CacheItems { get; } = [];
@@ -408,6 +421,7 @@ public sealed partial class MainViewModel : ViewModelBase, IDisposable
         HasCacheItems = CacheItems.Count > 0;
         UpdateCacheTotal();
 
+        Characters.Refresh(environments, linkRoot);
         foreach (var card in cards) await RefreshStarStringsAsync(card);
         UpdateIdleStatus();
     }

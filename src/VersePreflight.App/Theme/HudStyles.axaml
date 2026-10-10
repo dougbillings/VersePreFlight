@@ -127,6 +127,29 @@
         <Setter Property="Foreground" Value="{x:Static t:Hud.GoodBrush}" />
     </Style>
 
+    <!-- Page tabs -->
+    <Style Selector="Button.tab">
+        <Setter Property="MinHeight" Value="38" />
+        <Setter Property="MinWidth" Value="150" />
+        <Setter Property="Padding" Value="16,6" />
+        <Setter Property="FontSize" Value="13" />
+        <Setter Property="Background" Value="Transparent" />
+        <Setter Property="Foreground" Value="{x:Static t:Hud.TextDimBrush}" />
+        <Setter Property="BorderBrush" Value="{x:Static t:Hud.LineBrush}" />
+    </Style>
+    <Style Selector="Button.tab.active">
+        <Setter Property="Background" Value="{x:Static t:Hud.ButtonHoverBrush}" />
+        <Setter Property="Foreground" Value="{x:Static t:Hud.AccentBrush}" />
+        <Setter Property="BorderBrush" Value="{x:Static t:Hud.AccentBrush}" />
+    </Style>
+
+    <Style Selector="ListBoxItem">
+        <Setter Property="MinHeight" Value="44" />
+    </Style>
+    <Style Selector="ListBoxItem:selected /template/ ContentPresenter#PART_ContentPresenter">
+        <Setter Property="Background" Value="{x:Static t:Hud.ButtonHoverBrush}" />
+    </Style>
+
     <Style Selector="Button.small">
         <Setter Property="MinHeight" Value="34" />
         <Setter Property="Padding" Value="12,4" />
