@@ -152,6 +152,93 @@ public class FormatReaderTests
         Assert.Equal(skinId, paths.Keys.Single());
     }
 
+    // ---------- BC7, signed BC5 and gloss textures ----------
+
+    /// <summary>Writes values least significant bit first, as BC7 blocks are packed.</summary>
+    private sealed class BitWriter
+    {
+        private readonly byte[] _bytes = new byte[16];
+        private int _pos;
+        public BitWriter Put(int value, int bits)
+        {
+            for (var i = 0; i < bits; i++, _pos++)
+                if ((value >> i & 1) != 0) _bytes[_pos / 8] |= (byte)(1 << (_pos % 8));
+            return this;
+        }
+        public byte[] Bytes => _bytes;
+    }
+
+    private static byte[] Dds(int width, int height, uint dxgiFormat, byte[] data, bool magic = true)
+    {
+        var header = new byte[148];
+        BitConverter.GetBytes(0x20534444u).CopyTo(header, 0);
+        BitConverter.GetBytes(124).CopyTo(header, 4);
+        BitConverter.GetBytes(height).CopyTo(header, 12); BitConverter.GetBytes(width).CopyTo(header, 16);
+        BitConverter.GetBytes(1).CopyTo(header, 28);
+        BitConverter.GetBytes(4u).CopyTo(header, 80);                   // FourCC present
+        BitConverter.GetBytes(0x30315844u).CopyTo(header, 84);          // "DX10"
+        BitConverter.GetBytes(dxgiFormat).CopyTo(header, 128);
+        var file = header.Concat(data).ToArray();
+        return magic ? file : file[4..];
+    }
+
+    [Fact]
+    public void Bc7_AnchorTexelsBelongToTheirSubsets()
+    {
+        for (var p = 0; p < 64; p++)
+        {
+            Assert.Equal('0', Bc7.Partitions2[p][0]);
+            Assert.Equal('1', Bc7.Partitions2[p][Bc7.Anchors2[p]]);
+            Assert.Equal('0', Bc7.Partitions3[p][0]);
+            Assert.Equal('1', Bc7.Partitions3[p][Bc7.Anchors3A[p]]);
+            Assert.Equal('2', Bc7.Partitions3[p][Bc7.Anchors3B[p]]);
+        }
+    }
+
+    [Fact]
+    public void Bc7_DecodesMode6Block()
+    {
+        // Mode 6: one subset, 7-bit RGBA endpoints plus a p-bit each, 4-bit indices (3 for the anchor texel 0).
+        // Endpoint 0 is black and transparent, endpoint 1 white and opaque.
+        var w = new BitWriter().Put(1 << 6, 7);
+        foreach (var _ in Enumerable.Range(0, 4)) w.Put(0, 7).Put(127, 7); // R, G, B, A for both endpoints
+        w.Put(0, 1).Put(1, 1);                                            // p-bits
+        w.Put(0, 3).Put(15, 4).Put(8, 4);                                 // texels 0..2
+        for (var i = 3; i < 16; i++) w.Put(15, 4);
+
+        var tex = TextureReader.ReadRgba(f => f == "t.dds" ? Dds(4, 4, 98, w.Bytes) : null, "t.dds");
+
+        Assert.Equal(new byte[] { 0, 0, 0, 0 }, tex.Rgba[..4]);
+        Assert.Equal(new byte[] { 255, 255, 255, 255 }, tex.Rgba[4..8]);
+        Assert.Equal(135, tex.Rgba[8]); // weight 34 of 64: (34 * 255 + 32) >> 6
+    }
+
+    [Fact]
+    public void TextureReader_DecodesSignedBc5AsOffsetBytes()
+    {
+        // Red: endpoints +127 and -127, texel 0 uses +127, texel 1 uses -127; green: all 0
+        var block = new byte[16];
+        block[0] = 127; block[1] = unchecked((byte)-127); block[2] = 0b001_000;
+        var tex = TextureReader.ReadRgba(f => f == "n.dds" ? Dds(4, 4, 84, block) : null, "n.dds");
+
+        Assert.Equal(255, tex.Rgba[0]);
+        Assert.Equal(0, tex.Rgba[4]);
+        Assert.InRange(tex.Rgba[1], 127, 128); // zero
+    }
+
+    [Fact]
+    public void TextureReader_ReadsGlossFromHeaderlessSplitFile()
+    {
+        // Gloss maps sit beside normal maps as name.dds.a (no "DDS " magic), with parts name.dds.1a
+        var header = Dds(4, 4, 80, [], magic: false);
+        var mip0 = new byte[8]; mip0[0] = 90; mip0[1] = 90;
+        var files = new Dictionary<string, byte[]> { ["x_ddna.dds.a"] = header, ["x_ddna.dds.1a"] = mip0 };
+
+        var gloss = TextureReader.ReadChannel(f => files.GetValueOrDefault(f), "x_ddna.dds.a");
+
+        Assert.Equal((4, 4, 90), (gloss.Width, gloss.Height, (int)gloss.Texels[0]));
+    }
+
     // ---------- Colour textures ----------
 
     [Fact]

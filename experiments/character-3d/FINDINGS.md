@@ -80,3 +80,28 @@ Prototype scripts (C# file-based apps, run with `dotnet run <file>.cs`). Paths p
   and redshirt (black dye 1, red dye 2, amount 0.11 → red twists at the top). A black colour means "none" when the other
   is set. The visible reach is wider than the raw amount; √amount matched the shots better.
 - Still missing: scalp/stubble shadow on shaved areas, makeup, freckles; gomabptu's grey beard tips are faint.
+
+## Closer to the game: full skin material, hair caps, per-pixel renderer (2026-10-10)
+
+- Skin material (HumanSkin_V2) slots: TexSlot1 diffuse (DXT1 2048), TexSlot2 `_ddna` normal (signed BC5, green points
+  up the texture) with gloss in a header-less sibling chain `_ddna.dds.a` / `.dds.Na` (DDS header without the magic),
+  TexSlot4 `_spec` (DXT1, a reflectance mask; material Specular ≈ 0.032), TexSlot6 `skin_micro_detail` (uncompressed
+  RGBA, tiled 30×; red cavity, green normal Y, blue gloss, alpha normal X — CryEngine detail-map layout),
+  TexSlot12 `male_head_trans` (BC4 translucency). Wrinkle maps and head_mask aren't used.
+- Skin tone: SourceAverageColor/FinalSkinTone (linear) exist per material, but texture × body/SourceAverage didn't
+  match the shots. What matches: tone the texture so its mean equals the stored colour, desaturated 20% (linear),
+  and light it so camera-facing skin lands a little under the stored colour. The booth light is cool and side-on.
+- Hair materials (HairPBR): TexSlot1 `_opac` (BC5, R = G = opacity, 4096), TexSlot4 `_id` (BC4 strand ids),
+  TexSlot6 `_dir` (BC7 flow, mostly +V). Params: Smoothness, SpecularMultiplier, OpacityMipScale (2.7–3.8: opacity is
+  boosted at smaller mips), AmbientOcclusion, ShadowDensity, Base/Dye variation.
+- Hair caps: sub-materials with `%HAIR_CAP` in StringGenMask carry a density map (BC7 caps repeat it in every channel;
+  DXT5 caps are white with alpha). Beards use their own second submesh. Hair styles have no cap submesh: the
+  separate `m_universal_scalp` mesh (one submesh, material id 1) wears the equipped hairstyle's material, so its
+  sub-material 1 (`hair_scalp_m`). Characters saved before the scalp slot existed still get it.
+- Density comes mostly from shadowing: skin under hair/beards is darkened by the density of strand vertices within
+  1 cm; strands are darkened by their height above the skin. Without this, hair looks thin and see-through.
+- BC7 decoder verified bit-exact against BCnEncoder.Net on a 256² game texture (test-only check, not a dependency).
+- Renderer: visibility buffer + per-pixel skin shading (normal + detail, two GGX lobes, wrap/soft-normal scattering,
+  translucency), hair/caps lit per vertex and blended front to back with early exit, ACES tone mapping.
+  Release timings on a 16-thread desktop: 70–210 ms for a 2× supersampled 1200×1440 frame. The viewer draws a
+  capped-resolution frame while dragging and renders the full-quality one on a background thread.

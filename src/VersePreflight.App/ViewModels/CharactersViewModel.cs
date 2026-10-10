@@ -134,45 +134,43 @@ public sealed partial class CharactersViewModel(PreflightLog log, IUiServices ui
         }
     }
 
-    /// <summary>The head in the character's skin tone, the eyes, and the equipped hair, beard and eyebrows.</summary>
+    /// <summary>The head with the character's skin, the eyes, and the equipped hair, beard and eyebrows.</summary>
     private List<MeshPart> BuildParts(HeadLibrary library, CharacterFile character, AccessoryLibrary? accessories)
     {
         var head = library.Head.Blend(character);
         var skin = character.SkinColor?.ToVector() ?? CharacterColoring.DefaultSkin;
-        // The chosen skin texture adds pores, lips and shading; it's tinted so its average matches the skin tone
-        var skinTexture = accessories?.LoadSkinTexture(character.HeadMaterialId);
-        var parts = new List<MeshPart>
-        {
-            new(head, library.Head.Indices, CharacterColoring.Uniform(head.Length, skin), Specular: 0.10f, Gloss: 24f)
-            {
-                Uvs = library.Head.Uvs,
-                Albedo = skinTexture,
-                AlbedoTint = skinTexture is null ? Vector3.One : CharacterColoring.SkinTint(skinTexture, skin),
-            },
-        };
+        // The chosen skin material (texture, normal, gloss and pore detail), toned to the skin colour as the game does
+        var material = accessories?.LoadSkinMaterial(character.HeadMaterialId);
+        Surface skinSurface = material is null
+            ? new PlainSurface(Roughness: 0.55f, Reflectance: 0.03f)
+            : new SkinSurface(material, CharacterColoring.SkinTone(material, skin));
+        var parts = new List<MeshPart> { new(head, library.Head.Indices, CharacterColoring.Uniform(head.Length, skin), skinSurface) { Uvs = library.Head.Uvs } };
         if (library.Eyes is { } eyesSet)
         {
             var eyes = eyesSet.Blend(character);
             var iris = character.EyeColor?.ToVector() ?? new Vector3(0.35f, 0.25f, 0.15f);
-            parts.Add(new MeshPart(eyes, eyesSet.Indices, CharacterColoring.Eyes(eyes, iris), Specular: 0.6f, Gloss: 90f));
+            parts.Add(new MeshPart(eyes, eyesSet.Indices, CharacterColoring.Eyes(eyes, iris), new PlainSurface(Roughness: 0.12f) { AmbientOcclusion = 0.55f }));
         }
         if (accessories is null) return parts;
 
         try
         {
-            foreach (var (kind, item) in accessories.LoadFor(character, library.IsFemale))
+            var equipped = accessories.LoadFor(character, library.IsFemale);
+            var roots = equipped.SelectMany(e => CharacterColoring.StrandVertices(e.Mesh)).ToList();
+            if (roots.Count > 0) parts[0] = parts[0] with { Occlusion = CharacterColoring.SkinOcclusion(head, roots) };
+            foreach (var (kind, item) in equipped)
             {
                 var choice = kind switch { AccessoryKind.Beard => character.Beard, AccessoryKind.Eyebrows => character.Eyebrows, _ => character.Hair };
                 var colors = CharacterColoring.Hair(item.Mesh.Uvs, choice, item.DefaultMelanin);
+                var natural = CharacterColoring.Uniform(item.Mesh.Positions.Length, CharacterColoring.NaturalHair(choice, item.DefaultMelanin));
+                var strands = item.Layers.FirstOrDefault(l => l.Kind == HairLayerKind.Strands);
+                var occlusion = strands is null ? null : CharacterColoring.HairOcclusion(item.Mesh.Positions, head, strands.Shading.AmbientOcclusion);
                 foreach (var layer in item.Layers)
-                    parts.Add(new MeshPart(item.Mesh.Positions, layer.Indices, colors, Specular: 0.07f, Gloss: 18f)
-                    {
-                        Uvs = item.Mesh.Uvs,
-                        Opacity = layer.Opacity,
-                        AlphaCutoff = 0.15f, // keep more of each strand so hair reads as full, not wispy
-                        TwoSided = true,
-                        Rim = 0.3f,
-                    });
+                {
+                    parts.Add(layer.Kind == HairLayerKind.Cap
+                        ? new MeshPart(item.Mesh.Positions, layer.Indices, natural, new CapSurface(layer.Opacity)) { Uvs = item.Mesh.Uvs }
+                        : new MeshPart(item.Mesh.Positions, layer.Indices, colors, new HairSurface(layer)) { Uvs = item.Mesh.Uvs, Occlusion = occlusion });
+                }
             }
         }
         catch (Exception e) when (e is IOException or InvalidDataException or NotSupportedException)

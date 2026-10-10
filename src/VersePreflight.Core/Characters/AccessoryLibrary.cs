@@ -1,27 +1,39 @@
 using System.Collections.Concurrent;
+using System.Numerics;
 
 namespace VersePreflight.Core.Characters;
 
-/// <summary>
-/// A hair, beard or eyebrow mesh. <see cref="Layers"/> are the strand cards, each with its opacity
-/// texture; skin-shadow and scalp layers are left out for now.
-/// </summary>
-public sealed record AccessoryMesh(string Name, MeshGeometry Mesh, IReadOnlyList<StrandLayer> Layers)
+/// <summary>A hair, beard or eyebrow mesh, split into layers by material.</summary>
+public sealed record AccessoryMesh(string Name, MeshGeometry Mesh, IReadOnlyList<HairLayer> Layers)
 {
     /// <summary>The style's own default melanin (0 light .. 1 black), used when the character file stores 0.</summary>
     public float DefaultMelanin { get; init; } = 0.9f;
 }
 
-/// <summary>Triangles (indices into the mesh) drawn with one strand opacity texture.</summary>
-public sealed record StrandLayer(int[] Indices, GrayTexture Opacity);
+/// <summary>What a hair layer is: strand cards, or a "cap" of hair density painted onto the skin underneath.</summary>
+public enum HairLayerKind { Strands, Cap }
+
+/// <summary>
+/// Triangles (indices into the mesh) drawn with one material. <see cref="Opacity"/> is the strand atlas for
+/// strands, or the density map for a cap.
+/// </summary>
+public sealed record HairLayer(HairLayerKind Kind, int[] Indices, GrayTexture Opacity)
+{
+    /// <summary>Full width of the opacity texture in the game files (the loaded copy may be a smaller mip).</summary>
+    public int OpacityFullSize { get; init; }
+
+    /// <summary>Per-strand random ids, for colour variation.</summary>
+    public GrayTexture? Id { get; init; }
+    public HairShading Shading { get; init; } = new();
+}
 
 /// <summary>Which loadout slots are drawn, in drawing order, and how each is coloured.</summary>
 public enum AccessoryKind { Scalp, Eyebrows, Beard, Hair }
 
 /// <summary>
-/// Loads the hair, beard, eyebrows and scalp a character has equipped, from the player's own Data.p4k.
-/// Item ids are resolved to names through the game database once per game build (cached); meshes and
-/// textures are read on demand and kept in memory while the app runs.
+/// Loads the hair, beard, eyebrows and scalp a character has equipped, and their skin material, from the
+/// player's own Data.p4k. Item ids are resolved to names through the game database once per game build
+/// (cached); meshes and textures are read on demand and kept in memory while the app runs.
 /// </summary>
 public sealed class AccessoryLibrary : IDisposable
 {
@@ -41,9 +53,9 @@ public sealed class AccessoryLibrary : IDisposable
     private readonly Dictionary<string, GameArchiveEntry> _meshByName;
     private readonly Dictionary<Guid, string> _itemNames;
     private readonly Dictionary<Guid, string> _skinMaterials;
-    private readonly ConcurrentDictionary<Guid, ColorTexture?> _skins = new();
+    private readonly ConcurrentDictionary<Guid, SkinMaterial?> _skins = new();
     private readonly ConcurrentDictionary<string, AccessoryMesh?> _meshes = new(StringComparer.OrdinalIgnoreCase);
-    private readonly ConcurrentDictionary<string, GrayTexture?> _textures = new(StringComparer.OrdinalIgnoreCase);
+    private readonly ConcurrentDictionary<string, object?> _textures = new(StringComparer.OrdinalIgnoreCase);
 
     private AccessoryLibrary(GameArchive archive, List<GameArchiveEntry> entries, Dictionary<Guid, string> itemNames, Dictionary<Guid, string> skinMaterials)
     {
@@ -93,54 +105,87 @@ public sealed class AccessoryLibrary : IDisposable
     /// <summary>The accessories this character has equipped, for the given body type.</summary>
     public List<(AccessoryKind Kind, AccessoryMesh Mesh)> LoadFor(CharacterFile character, bool female)
     {
-        var result = new List<(AccessoryKind, AccessoryMesh)>();
+        // Record "hair_24" -> mesh "m_hair_24"; the shared scalp record maps to "m_universal_scalp"
+        var equipped = new List<(AccessoryKind Kind, string Mesh)>();
         foreach (var (kind, port) in Ports)
         {
             if (!character.Loadout.TryGetValue(CharacterFile.Hash(port), out var id) || !_itemNames.TryGetValue(id, out var item)) continue;
-            // Record "hair_24" -> mesh "m_hair_24"; the shared scalp record maps to "m_universal_scalp"
-            var meshName = (female ? "f_" : "m_") + (item.Equals("shared_scalp_unified", StringComparison.OrdinalIgnoreCase) ? "universal_scalp" : item);
-            if (_meshes.GetOrAdd(meshName, LoadMesh) is { } mesh) result.Add((kind, mesh));
+            equipped.Add((kind, (female ? "f_" : "m_") + (item.Equals("shared_scalp_unified", StringComparison.OrdinalIgnoreCase) ? "universal_scalp" : item)));
+        }
+
+        // The scalp has no material of its own: it wears the hairstyle's hair cap (its second sub-material).
+        // Characters saved before the scalp slot existed still get one under their hair.
+        var hair = equipped.FirstOrDefault(e => e.Kind == AccessoryKind.Hair).Mesh;
+        if (hair is not null && equipped.All(e => e.Kind != AccessoryKind.Scalp))
+            equipped.Insert(0, (AccessoryKind.Scalp, (female ? "f_" : "m_") + "universal_scalp"));
+        var result = new List<(AccessoryKind, AccessoryMesh)>();
+        foreach (var (kind, meshName) in equipped)
+        {
+            var materialFrom = kind == AccessoryKind.Scalp ? hair : meshName;
+            if (materialFrom is null) continue;
+            if (_meshes.GetOrAdd($"{meshName}|{materialFrom}", _ => LoadMesh(meshName, materialFrom)) is { } mesh) result.Add((kind, mesh));
         }
         return result;
     }
 
-    private AccessoryMesh? LoadMesh(string meshName)
+    private AccessoryMesh? LoadMesh(string meshName, string materialFrom)
     {
-        if (!_meshByName.TryGetValue(meshName.ToLowerInvariant(), out var entry)) return null;
+        if (!_meshByName.TryGetValue(meshName.ToLowerInvariant(), out var entry)
+            || !_meshByName.TryGetValue(materialFrom.ToLowerInvariant(), out var materialEntry)) return null;
         var mesh = SkinMeshReader.Read(_archive.Read(entry));
-        var (materials, melanin) = ReadSubMaterialOpacity(entry.Path);
+        var (materials, melanin) = ReadHairMaterials(materialEntry.Path);
         var submeshes = mesh.Submeshes.Count > 0 ? mesh.Submeshes : [new Submesh(0, 0, mesh.Indices.Length)];
 
-        // One layer per submesh whose material has a strand opacity texture; other layers (skin
-        // shadow, scalp caps) need skin blending and aren't drawn yet
-        var layers = new List<StrandLayer>();
+        var layers = new List<HairLayer>();
         foreach (var s in submeshes)
         {
-            if (s.MaterialId >= materials.Count || materials[s.MaterialId] is not { } opacity) continue;
-            layers.Add(new StrandLayer(mesh.Indices.AsSpan(s.FirstIndex, s.IndexCount).ToArray(), opacity));
+            if (s.MaterialId >= materials.Count || materials[s.MaterialId] is not { } layer) continue;
+            layers.Add(layer with { Indices = mesh.Indices.AsSpan(s.FirstIndex, s.IndexCount).ToArray() });
         }
         return layers.Count == 0 ? null : new AccessoryMesh(meshName, mesh, layers) { DefaultMelanin = melanin ?? 0.9f };
     }
 
-    /// <summary>The character's skin texture (diffuse of its chosen head skin material), if it can be read.</summary>
-    public ColorTexture? LoadSkinTexture(Guid headMaterialId) => _skins.GetOrAdd(headMaterialId, id =>
+    /// <summary>The character's skin material (their chosen head skin), if it can be read.</summary>
+    public SkinMaterial? LoadSkinMaterial(Guid headMaterialId) => _skins.GetOrAdd(headMaterialId, id =>
     {
         if (!_skinMaterials.TryGetValue(id, out var mtlPath)) return null;
-        var mtl = ReadFile(("data\\" + mtlPath).Replace('/', '\\'));
+        var mtl = ReadFile(GamePath(mtlPath));
         if (mtl is null || !CryXml.IsBinary(mtl)) return null;
-        // The diffuse map is TexSlot1 of the head shader
-        var diffuse = CryXml.Parse(mtl).Descendants()
-            .FirstOrDefault(e => e.Tag.Equals("Texture", StringComparison.OrdinalIgnoreCase) && string.Equals(e["Map"], "TexSlot1", StringComparison.OrdinalIgnoreCase))?["File"];
-        if (diffuse is null) return null;
+        var material = CryXml.Parse(mtl).Descendants()
+            .FirstOrDefault(e => e.Tag == "Material" && (e["Shader"]?.StartsWith("HumanSkin", StringComparison.OrdinalIgnoreCase) ?? false));
+        if (material is null) return null;
+
+        var textures = Textures(material);
+        var p = material.Children.FirstOrDefault(c => c.Tag == "PublicParams");
         try
         {
-            return TextureReader.ReadColor(ReadFile, ("data\\" + Path.ChangeExtension(diffuse, ".dds")).Replace('/', '\\'), 1024);
+            if (!textures.TryGetValue("TexSlot1", out var diffuse)) return null;
+            var normalPath = textures.GetValueOrDefault("TexSlot2");
+            var detail = material.Descendants().FirstOrDefault(e => e.Tag == "Texture" && e["Map"] == "TexSlot6");
+            var detailMod = detail?.Children.FirstOrDefault(c => c.Tag == "TexMod");
+            return new SkinMaterial(TextureReader.ReadColor(ReadFile, DdsPath(diffuse), 2048))
+            {
+                Normal = Try(() => normalPath is null ? null : TextureReader.ReadRgba(ReadFile, DdsPath(normalPath), 1024)),
+                Gloss = Try(() => normalPath is null ? null : TextureReader.ReadChannel(ReadFile, DdsPath(normalPath) + ".a", 1024)),
+                Specular = Try(() => textures.GetValueOrDefault("TexSlot4") is { } spec ? TextureReader.ReadRgba(ReadFile, DdsPath(spec), 1024).Channel(0) : null),
+                Detail = Try(() => detail?["File"] is { } file ? Cached(DdsPath(file), path => TextureReader.ReadRgba(ReadFile, path, 512)) : null),
+                DetailTiling = MaterialParams.Float(detailMod, "TileU", 1),
+                Translucency = Try(() => textures.GetValueOrDefault("TexSlot12") is { } trans ? Cached(DdsPath(trans), path => TextureReader.ReadChannel(ReadFile, path, 512)) : null),
+                SpecularLevel = MaterialParams.Vector(material, "Specular", new Vector3(0.032f)).X,
+                DetailBumpScale = MaterialParams.Float(p, "DetailBumpScale", 1),
+                DetailCavityScale = MaterialParams.Float(p, "DetailCavityScale", 0),
+                DetailGlossScale = MaterialParams.Float(p, "DetailGlossScale", 0),
+                TranslucencyMultiplier = MaterialParams.Float(p, "TranslucencyMultiplier", 0),
+            };
         }
         catch (Exception e) when (e is NotSupportedException or InvalidDataException or FileNotFoundException) { return null; }
     });
 
-    /// <summary>For each sub-material (in material id order), its strand opacity texture, or null; plus the style's default melanin.</summary>
-    private (List<GrayTexture?> Opacity, float? Melanin) ReadSubMaterialOpacity(string meshPath)
+    /// <summary>
+    /// For each sub-material (in material id order), a layer template (indices filled in later), or null
+    /// for materials that aren't drawn; plus the style's default melanin.
+    /// </summary>
+    private (List<HairLayer?> Layers, float? Melanin) ReadHairMaterials(string meshPath)
     {
         var folder = Path.GetDirectoryName(meshPath)!.ToLowerInvariant();
         var baseName = Path.GetFileNameWithoutExtension(meshPath).ToLowerInvariant();
@@ -155,25 +200,66 @@ public sealed class AccessoryLibrary : IDisposable
         if (!CryXml.IsBinary(bytes)) return ([], null);
         var root = CryXml.Parse(bytes);
         var subs = root.Children.FirstOrDefault(c => c.Tag.Equals("SubMaterials", StringComparison.OrdinalIgnoreCase))?.Children ?? [root];
-        var melanin = subs.SelectMany(s => s.Descendants())
-            .Select(e => e["BaseMelanin"])
-            .Select(v => float.TryParse(v, System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out var m) ? m : (float?)null)
-            .FirstOrDefault(m => m is not null);
-
-        return (subs.Select(sub =>
+        float? melanin = null;
+        var layers = new List<HairLayer?>();
+        foreach (var sub in subs)
         {
-            var file = sub.Descendants()
-                .Where(e => e.Tag.Equals("Texture", StringComparison.OrdinalIgnoreCase))
-                .Select(e => e["File"])
-                .FirstOrDefault(f => f is not null && f.Contains("_opac", StringComparison.OrdinalIgnoreCase));
-            if (file is null) return null;
-            var dds = ("data\\" + Path.ChangeExtension(file, ".dds")).Replace('/', '\\').ToLowerInvariant();
-            return _textures.GetOrAdd(dds, path =>
+            var textures = Textures(sub);
+            var p = sub.Children.FirstOrDefault(c => c.Tag == "PublicParams");
+            var cap = sub["StringGenMask"]?.Contains("HAIR_CAP", StringComparison.OrdinalIgnoreCase) ?? false;
+            var opacity = textures.GetValueOrDefault("TexSlot1");
+            HairLayer? layer = null;
+            if (cap && opacity is not null)
             {
-                try { return TextureReader.ReadChannel(ReadFile, path, 1024); }
-                catch (Exception e) when (e is NotSupportedException or InvalidDataException or FileNotFoundException) { return null; }
-            });
-        }).ToList(), melanin);
+                // Density is in alpha (BC7 caps repeat it in every channel; DXT5 caps are white with alpha)
+                if (Try(() => Cached(DdsPath(opacity) + "#alpha", _ => TextureReader.ReadRgba(ReadFile, DdsPath(opacity), 512).Channel(3))) is { } density)
+                    layer = new HairLayer(HairLayerKind.Cap, [], density);
+            }
+            else if (opacity is not null && opacity.Contains("_opac", StringComparison.OrdinalIgnoreCase)
+                     && Try(() => Cached(DdsPath(opacity), path => TextureReader.ReadChannel(ReadFile, path, 1024))) is { } strands)
+            {
+                melanin ??= p?["BaseMelanin"] is not null ? MaterialParams.Float(p, "BaseMelanin", 0.9f) : null;
+                layer = new HairLayer(HairLayerKind.Strands, [], strands)
+                {
+                    OpacityFullSize = Try(() => TextureReader.ReadSize(ReadFile, DdsPath(opacity)).Width) ?? strands.Width,
+                    Id = textures.GetValueOrDefault("TexSlot4") is { } id ? Try(() => Cached(DdsPath(id), path => TextureReader.ReadChannel(ReadFile, path, 512))) : null,
+                    Shading = new HairShading
+                    {
+                        Smoothness = MaterialParams.Float(p, "Smoothness", 0.6f),
+                        SpecularMultiplier = MaterialParams.Float(p, "SpecularMultiplier", 1),
+                        OpacityMipScale = MaterialParams.Float(p, "OpacityMipScale", 3),
+                        AmbientOcclusion = MaterialParams.Float(p, "AmbientOcclusion", 2.5f),
+                        ShadowDensity = MaterialParams.Float(p, "ShadowDensity", 3),
+                        MelaninVariation = MaterialParams.Float(p, "BaseMelaninVariation", 0),
+                        PigmentVariation = MaterialParams.Float(p, "DyePigmentVariation", 0),
+                    },
+                };
+            }
+            layers.Add(layer);
+        }
+        return (layers, melanin);
+    }
+
+    private static Dictionary<string, string> Textures(CryXmlElement material) =>
+        material.Children.Where(c => c.Tag == "Textures").SelectMany(t => t.Children)
+            .Where(t => t["Map"] is not null && t["File"] is not null)
+            .GroupBy(t => t["Map"]!).ToDictionary(g => g.Key, g => g.First()["File"]!);
+
+    private static string GamePath(string path) => ("data\\" + path).Replace('/', '\\');
+    private static string DdsPath(string texture) => GamePath(Path.ChangeExtension(texture, ".dds"));
+
+    private T? Cached<T>(string key, Func<string, T?> load) where T : class => (T?)_textures.GetOrAdd(key, k => load(k.Split('#')[0]));
+
+    private static T? Try<T>(Func<T?> read) where T : class
+    {
+        try { return read(); }
+        catch (Exception e) when (e is NotSupportedException or InvalidDataException or FileNotFoundException) { return null; }
+    }
+
+    private static int? Try(Func<int> read)
+    {
+        try { return read(); }
+        catch (Exception e) when (e is NotSupportedException or InvalidDataException or FileNotFoundException) { return null; }
     }
 
     private byte[]? ReadFile(string path) => _byPath.TryGetValue(path.ToLowerInvariant(), out var e) ? _archive.Read(e) : null;
