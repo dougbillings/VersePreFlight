@@ -135,50 +135,8 @@ public sealed partial class CharactersViewModel(PreflightLog log, IUiServices ui
     }
 
     /// <summary>The head with the character's skin, the eyes, and the equipped hair, beard and eyebrows.</summary>
-    private List<MeshPart> BuildParts(HeadLibrary library, CharacterFile character, AccessoryLibrary? accessories)
-    {
-        var head = library.Head.Blend(character);
-        var skin = character.SkinColor?.ToVector() ?? CharacterColoring.DefaultSkin;
-        // The chosen skin material (texture, normal, gloss and pore detail), toned to the skin colour as the game does
-        var material = accessories?.LoadSkinMaterial(character.HeadMaterialId);
-        Surface skinSurface = material is null
-            ? new PlainSurface(Roughness: 0.55f, Reflectance: 0.03f)
-            : new SkinSurface(material, CharacterColoring.SkinTone(material, skin));
-        var parts = new List<MeshPart> { new(head, library.Head.Indices, CharacterColoring.Uniform(head.Length, skin), skinSurface) { Uvs = library.Head.Uvs } };
-        if (library.Eyes is { } eyesSet)
-        {
-            var eyes = eyesSet.Blend(character);
-            var iris = character.EyeColor?.ToVector() ?? new Vector3(0.35f, 0.25f, 0.15f);
-            parts.Add(new MeshPart(eyes, eyesSet.Indices, CharacterColoring.Eyes(eyes, iris), new PlainSurface(Roughness: 0.12f) { AmbientOcclusion = 0.35f }));
-        }
-        if (accessories is null) return parts;
-
-        try
-        {
-            var equipped = accessories.LoadFor(character, library.IsFemale);
-            var roots = equipped.SelectMany(e => CharacterColoring.StrandVertices(e.Mesh)).ToList();
-            if (roots.Count > 0) parts[0] = parts[0] with { Occlusion = CharacterColoring.SkinOcclusion(head, roots) };
-            foreach (var (kind, item) in equipped)
-            {
-                var choice = kind switch { AccessoryKind.Beard => character.Beard, AccessoryKind.Eyebrows => character.Eyebrows, _ => character.Hair };
-                var colors = CharacterColoring.Hair(item.Mesh.Uvs, choice, item.DefaultMelanin);
-                var natural = CharacterColoring.Uniform(item.Mesh.Positions.Length, CharacterColoring.NaturalHair(choice, item.DefaultMelanin));
-                var strands = item.Layers.FirstOrDefault(l => l.Kind == HairLayerKind.Strands);
-                var occlusion = strands is null ? null : CharacterColoring.HairOcclusion(item.Mesh.Positions, head, strands.Shading.AmbientOcclusion);
-                foreach (var layer in item.Layers)
-                {
-                    parts.Add(layer.Kind == HairLayerKind.Cap
-                        ? new MeshPart(item.Mesh.Positions, layer.Indices, natural, new CapSurface(layer.Opacity)) { Uvs = item.Mesh.Uvs }
-                        : new MeshPart(item.Mesh.Positions, layer.Indices, colors, new HairSurface(layer)) { Uvs = item.Mesh.Uvs, Occlusion = occlusion });
-                }
-            }
-        }
-        catch (Exception e) when (e is IOException or InvalidDataException or NotSupportedException)
-        {
-            log.Warning($"Character viewer: couldn't load hair for this character: {e.Message}");
-        }
-        return parts;
-    }
+    private List<MeshPart> BuildParts(HeadLibrary library, CharacterFile character, AccessoryLibrary? accessories) =>
+        CharacterScene.Build(library, character, accessories, warn: message => log.Warning($"Character viewer: {message}"));
 
     /// <summary>Head data comes from the first install with a Data.p4k (LIVE preferred), cached per game build.</summary>
     private async Task<List<HeadLibrary>?> GetLibrariesAsync()

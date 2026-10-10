@@ -77,6 +77,12 @@ public sealed class HeadRenderer
     /// <summary>The lights and output settings.</summary>
     public HeadLighting Lighting { get; set; } = new();
 
+    /// <summary>How much strand opacity grows per mip level (times the material's OpacityMipScale).</summary>
+    public float StrandOpacityBoost { get; set; } = 0.4f;
+
+    /// <summary>Opacity multiplier for hair caps (density painted on the skin).</summary>
+    public float CapOpacity { get; set; } = 1.6f;
+
     /// <summary>
     /// Sets what to draw. The first part frames the camera (Z-up, face looking towards +Y, as in the game files).
     /// </summary>
@@ -453,7 +459,7 @@ public sealed class HeadRenderer
                     // so only their front faces are kept
                     if (Cross(s0, s1, s2) * part.Winding >= 0) continue;
                     _blendedKeys[n] = depth + 0.004f; // and they sort under the strands
-                    _blended[n++] = new Fragment(p, t, 0, 1.6f);
+                    _blended[n++] = new Fragment(p, t, 0, CapOpacity);
                     continue;
                 }
 
@@ -463,7 +469,7 @@ public sealed class HeadRenderer
                 var texels = MathF.Abs((uv[b].X - uv[a].X) * (uv[c].Y - uv[a].Y) - (uv[c].X - uv[a].X) * (uv[b].Y - uv[a].Y)) * fullSize * fullSize;
                 var lod = screen > 1e-6f && texels > 0 ? MathF.Max(0, 0.5f * MathF.Log2(texels / screen)) : 8;
                 var displayLod = Math.Clamp(lod + screenLod, 0, 5);
-                var boost = 1 + hair.Layer.Shading.OpacityMipScale * displayLod * 0.4f;
+                var boost = 1 + hair.Layer.Shading.OpacityMipScale * displayLod * StrandOpacityBoost;
                 _blendedKeys[n] = depth;
                 _blended[n++] = new Fragment(p, t, MathF.Max(0, lod - loadedLod), boost);
             }

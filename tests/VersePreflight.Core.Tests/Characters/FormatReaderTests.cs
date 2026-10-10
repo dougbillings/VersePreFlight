@@ -278,3 +278,22 @@ public class FormatReaderTests
         Assert.Equal(new Submesh(3, 0, 3), Assert.Single(mesh.Submeshes));
     }
 }
+
+/// <summary>Tests for moving face-mounted meshes (hair, beards) with the character's face.</summary>
+public class FaceFollowerTests
+{
+    [Fact]
+    public void FollowsTheFaceUnderAPoint_AndLeavesFarPointsAlone()
+    {
+        // A small patch of "face" that moves 5 mm forward in the character's blend
+        var baseHead = new List<System.Numerics.Vector3>();
+        for (var x = -2; x <= 2; x++) for (var z = -2; z <= 2; z++) baseHead.Add(new(x * 0.01f, 0, z * 0.01f));
+        var blended = baseHead.Select(p => p + new System.Numerics.Vector3(0, 0.005f, 0)).ToArray();
+        var follower = new FaceFollower([.. baseHead]);
+
+        var moved = follower.Follow([new(0, 0.01f, 0), new(0, 0.5f, 0)], blended);
+
+        Assert.Equal(0.015f, moved[0].Y, 4); // 1 cm above the skin: moves with it
+        Assert.Equal(0.5f, moved[1].Y, 4);   // half a metre away: stays put
+    }
+}

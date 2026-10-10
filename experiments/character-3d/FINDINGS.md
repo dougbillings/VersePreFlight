@@ -130,3 +130,17 @@ light and solves for intensities by least squares against the in-game patches (i
   also holds a full facial rig (≈179 joints with per-preset data, "FACIAL_C_FacialRoot", ~48 MB of expression /
   pose-space shapes "BS_CTL_PSD", interleaved per region). The in-game difference most likely comes from that rig or
   the booth's idle expression; decoding it would be a sizeable reverse-engineering job.
+
+## Beards (2026-10-10)
+
+`beard_vs_ingame.cs` measures moustache, beside-mouth and chin patches against the in-game shots (eye-aligned).
+- What made beards look thick: the skin shading under facial hair. At full strength (the setting that makes short
+  scalp hair read dense) skin under beards went near black (BACKHAND moustache 9 vs 34 in game, chin 11 vs 25), so
+  beards read as solid blocks. Facial hair now shades the skin at 0.15 of the scalp-hair strength; skin shows through
+  as in game. The beard cap layer and the strand opacity boost made little difference.
+- Hair, beards, eyebrows and the scalp are skinned meshes (`.skin`/`.skinm`) in game, bound to the head skeleton
+  that the head DNA moves per character; there is no hair DNA. They're authored on the base head, so on a blended
+  face they floated off or sank in (gomab's beard bulged past his jaw). `FaceFollower` moves each vertex by the
+  blended face's displacement around it (6 nearest base-head vertices, inverse-square weights), fully within 3 cm of
+  the skin, fading out by 12 cm. Beard outlines now line up with the in-game shots.
+- Still different: in-game beards look more neutral/near-black; ours are a little warmer and browner.

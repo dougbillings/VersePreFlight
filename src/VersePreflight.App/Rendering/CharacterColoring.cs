@@ -42,8 +42,8 @@ public static class CharacterColoring
     }
 
     /// <summary>The strand vertices of a mesh's strand layers (not caps or other geometry).</summary>
-    public static IEnumerable<Vector3> StrandVertices(AccessoryMesh item) =>
-        item.Layers.Where(l => l.Kind == HairLayerKind.Strands).SelectMany(l => l.Indices).Distinct().Select(i => item.Mesh.Positions[i]);
+    public static IEnumerable<Vector3> StrandVertices(AccessoryMesh item, Vector3[] positions) =>
+        item.Layers.Where(l => l.Kind == HairLayerKind.Strands).SelectMany(l => l.Indices).Distinct().Select(i => positions[i]);
 
     /// <summary>For each point, the sum of (1 - d/r)² over sample points within distance r.</summary>
     internal static float[] Density(Vector3[] points, IReadOnlyList<Vector3> samples, float radius)
