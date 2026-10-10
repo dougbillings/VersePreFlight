@@ -62,7 +62,7 @@ public sealed class AccessoryLibrary : IDisposable
         _archive = archive;
         _byPath = entries.GroupBy(e => e.Path.ToLowerInvariant()).ToDictionary(g => g.Key, g => g.First());
         _meshByName = entries.Where(e => e.Path.EndsWith(".skinm", StringComparison.OrdinalIgnoreCase))
-            .GroupBy(e => Path.GetFileNameWithoutExtension(e.Path).ToLowerInvariant())
+            .GroupBy(e => ArchivePath.FileNameWithoutExtension(e.Path).ToLowerInvariant())
             .ToDictionary(g => g.Key, g => g.First());
         _itemNames = itemNames;
         _skinMaterials = skinMaterials;
@@ -189,13 +189,13 @@ public sealed class AccessoryLibrary : IDisposable
     /// </summary>
     private (List<HairLayer?> Layers, float? Melanin) ReadHairMaterials(string meshPath)
     {
-        var folder = Path.GetDirectoryName(meshPath)!.ToLowerInvariant();
-        var baseName = Path.GetFileNameWithoutExtension(meshPath).ToLowerInvariant();
+        var folder = ArchivePath.Directory(meshPath).ToLowerInvariant();
+        var baseName = ArchivePath.FileNameWithoutExtension(meshPath).ToLowerInvariant();
         // Prefer "<mesh>.mtl", otherwise any material in the folder named after the mesh (e.g. colour variants)
-        var mtl = _byPath.GetValueOrDefault(Path.Combine(folder, baseName + ".mtl"))
+        var mtl = _byPath.GetValueOrDefault(ArchivePath.Combine(folder, baseName + ".mtl"))
                   ?? _byPath.Values.FirstOrDefault(e => e.Path.EndsWith(".mtl", StringComparison.OrdinalIgnoreCase)
-                      && Path.GetDirectoryName(e.Path)!.Equals(folder, StringComparison.OrdinalIgnoreCase)
-                      && Path.GetFileName(e.Path).StartsWith(baseName, StringComparison.OrdinalIgnoreCase));
+                      && ArchivePath.Directory(e.Path).Equals(folder, StringComparison.OrdinalIgnoreCase)
+                      && ArchivePath.FileName(e.Path).StartsWith(baseName, StringComparison.OrdinalIgnoreCase));
         if (mtl is null) return ([], null);
 
         var bytes = _archive.Read(mtl);

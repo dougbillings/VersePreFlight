@@ -197,3 +197,26 @@ public sealed class GameArchive : IDisposable
         public override void Write(byte[] buffer, int offset, int count) => throw new NotSupportedException();
     }
 }
+
+/// <summary>
+/// Path helpers for archive entry paths, which use backslashes on every OS (System.IO.Path only treats
+/// them as separators on Windows).
+/// </summary>
+public static class ArchivePath
+{
+    private static int LastSeparator(string path) => path.LastIndexOfAny(['\\', '/']);
+
+    public static string FileName(string path) => path[(LastSeparator(path) + 1)..];
+
+    public static string FileNameWithoutExtension(string path)
+    {
+        var name = FileName(path);
+        var dot = name.LastIndexOf('.');
+        return dot < 0 ? name : name[..dot];
+    }
+
+    /// <summary>The folder part, without a trailing separator ("" for a bare file name).</summary>
+    public static string Directory(string path) => LastSeparator(path) is var i and >= 0 ? path[..i] : "";
+
+    public static string Combine(string folder, string name) => folder.Length == 0 ? name : folder + "\\" + name;
+}

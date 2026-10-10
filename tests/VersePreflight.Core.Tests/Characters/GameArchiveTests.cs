@@ -6,6 +6,16 @@ namespace VersePreflight.Core.Tests.Characters;
 
 public class GameArchiveTests
 {
+    [Fact]
+    public void ArchivePath_SplitsBackslashPathsOnEveryOs()
+    {
+        const string path = @"Data\Objects\Characters\Human\heads\male\m_hair_24.skinm";
+        Assert.Equal("m_hair_24.skinm", ArchivePath.FileName(path));
+        Assert.Equal("m_hair_24", ArchivePath.FileNameWithoutExtension(path));
+        Assert.Equal(@"Data\Objects\Characters\Human\heads\male", ArchivePath.Directory(path));
+        Assert.Equal(@"Data\Objects\x.mtl", ArchivePath.Combine(@"Data\Objects", "x.mtl"));
+    }
+
     /// <summary>Writes a tiny ZIP64 archive laid out like Data.p4k (CIG extra fields, zstd).</summary>
     private static void WriteArchive(string path, params (string Name, byte[] Data, bool Encrypted)[] files)
     {

@@ -23,6 +23,10 @@ and apply to every contribution and release:
   from their authors at run time and never included in this repository or its releases.
 - **The game itself is never modified.** No changes to game executables or `Data.p4k`, and no
   interaction with the running game.
+- **Game files are only read, locally.** The experimental character viewer reads the player's own
+  installation (`Data.p4k`, read-only; encrypted entries are refused and no keys are included) to
+  draw their saved characters on their own screen. It has no export: nothing is extracted for
+  sharing, and what it caches (head shapes, item names) stays on that PC.
 - **Visible notices.** The fan-project notice above appears in the README, the app's main window,
   the About screen and the first-run screen, in normal-sized text.
 - **Names.** No "Star Citizen", "Roberts Space Industries", "Cloud Imperium", "Turbulent",

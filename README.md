@@ -17,19 +17,20 @@ game ready after every patch:
 - **StarStrings (optional):** installs or updates MrKraken's community
   [StarStrings](https://github.com/MrKraken/StarStrings) pack, checking that it matches your
   game build first. Your other `user.cfg` settings are kept.
+- **Character viewer (experimental):** a rotatable 3D view of your saved custom characters
+  (face shape, skin, eyes, hair and beard), rebuilt on your PC from your own game install.
 
-Verse Preflight never modifies the game's executables or `Data.p4k`, never interacts with the
-running game, and collects no data.
+Verse Preflight never modifies the game's executables or `Data.p4k` (the character viewer only
+reads it), never interacts with the running game, and collects no data.
 
 ## Status
 
 Early development. Planned milestones:
 
 1. **Core library** (done): all features, with automated tests on Windows and Linux.
-2. **Desktop app** (Avalonia, in progress) and the first public Windows release.
+2. **Desktop app** (Avalonia, in progress): alpha builds for Windows are on the
+   [Releases](https://github.com/dougbillings/VersePreFlight/releases) page.
 3. **Linux support** for Wine/Proton installs.
-
-Until the first release, there is nothing to download yet.
 
 ## Building
 
@@ -67,6 +68,8 @@ Settings). No other network requests are made, apart from StarStrings downloads 
 - **StarStrings** by [MrKraken](https://github.com/MrKraken/StarStrings): a community-made,
   unofficial string replacement pack. Verse Preflight downloads it from the author's own GitHub
   releases and never redistributes it.
+- **StarBreaker** by [diogotr7](https://github.com/diogotr7/StarBreaker): the character viewer's
+  knowledge of the game's file formats comes from this MIT-licensed toolkit.
 
 ## Legal
 

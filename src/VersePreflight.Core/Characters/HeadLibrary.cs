@@ -128,14 +128,14 @@ public sealed class HeadLibrary
             p.StartsWith(HeadsFolder, StringComparison.OrdinalIgnoreCase) &&
             (p.EndsWith("_head.skinm", StringComparison.OrdinalIgnoreCase) || p.EndsWith("_eyes.skinm", StringComparison.OrdinalIgnoreCase) ||
              p.EndsWith("_face_t1_pu_head.dna", StringComparison.OrdinalIgnoreCase) || p.EndsWith("_face_t1_pu_eyes.dna", StringComparison.OrdinalIgnoreCase)));
-        var byName = entries.GroupBy(e => Path.GetFileName(e.Path).ToLowerInvariant()).ToDictionary(g => g.Key, g => g.First());
+        var byName = entries.GroupBy(e => ArchivePath.FileName(e.Path).ToLowerInvariant()).ToDictionary(g => g.Key, g => g.First());
         MeshGeometry? Mesh(string fileName) =>
             byName.TryGetValue(fileName.ToLowerInvariant(), out var e) ? SkinMeshReader.Read(archive.Read(e)) : null;
 
         var libraries = new List<HeadLibrary>();
         foreach (var dnaEntry in entries.Where(e => e.Path.EndsWith("_head.dna", StringComparison.OrdinalIgnoreCase)))
         {
-            var baseName = Path.GetFileName(dnaEntry.Path)[..^"_head.dna".Length];
+            var baseName = ArchivePath.FileName(dnaEntry.Path)[..^"_head.dna".Length];
             progress?.Report($"Reading {baseName}...");
             var dna = HeadDnaFile.Parse(archive.Read(dnaEntry));
             if (Mesh(baseName + "_head.skinm") is not { } baseHead || baseHead.Positions.Length != dna.VertexCount) continue;
