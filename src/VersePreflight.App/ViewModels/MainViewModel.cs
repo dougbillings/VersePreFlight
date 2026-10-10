@@ -11,6 +11,7 @@ using VersePreflight.App.Theme;
 using VersePreflight.Core;
 using VersePreflight.Core.Cache;
 using VersePreflight.Core.Config;
+using VersePreflight.Core.Feedback;
 using VersePreflight.Core.Game;
 using VersePreflight.Core.IO;
 using VersePreflight.Core.Links;
@@ -198,6 +199,38 @@ public sealed partial class MainViewModel : ViewModelBase, IDisposable
     [RelayCommand] private void OpenAbout() => Overlay = new AboutViewModel(_ui, () => Overlay = null);
 
     [RelayCommand]
+    private void OpenFeedback()
+    {
+        var logLines = LogEntries.TakeLast(60).Select(e => FeedbackDiagnostics.Redact(e.FullText)).ToList();
+        Overlay = new FeedbackViewModel(FeedbackDiagnostics.Redact(BuildDiagnosticsSummary()), logLines, _ui,
+            message => _log.Info(message), () => Overlay = null);
+    }
+
+    /// <summary>Non-personal facts that help with a bug report; redacted again before use.</summary>
+    private string BuildDiagnosticsSummary()
+    {
+        var text = new System.Text.StringBuilder()
+            .AppendLine($"{AppInfo.Name} {AppInfo.Version}{(_store.IsPortable ? " (portable)" : "")}")
+            .AppendLine($"OS: {System.Runtime.InteropServices.RuntimeInformation.OSDescription} " +
+                        $"({System.Runtime.InteropServices.RuntimeInformation.OSArchitecture}), .NET {Environment.Version}")
+            .AppendLine($"Settings: {_config.Links.Count(l => l.Enabled)} of {_config.Links.Count} links on, " +
+                        $"link folder {(_store.ResolveLinkRoot(_config) is null ? "not set" : "set")}, " +
+                        $"StarStrings {(_config.StarStringsEnabled ? "on" : "off")}" +
+                        $"{(_config.StarStringsIncludePtu ? " (incl. PTU)" : "")}, " +
+                        $"update check {(_config.CheckForUpdates ? "on" : "off")}");
+
+        if (Environments.Count == 0) text.AppendLine("Installs: none detected");
+        foreach (var env in Environments)
+        {
+            text.AppendLine($"{env.Name}: {env.Environment.Build?.ToString() ?? "build unknown"}");
+            foreach (var link in env.Links) text.AppendLine($"  {link.Name}: {link.StateText}");
+            text.AppendLine($"  StarStrings: {env.StarStringsState}");
+        }
+        text.Append($"Status: {StatusText}");
+        return text.ToString();
+    }
+
+    [RelayCommand]
     private async Task CopyLogAsync()
     {
         await _ui.CopyTextAsync(string.Join(Environment.NewLine, LogEntries.Select(e => e.FullText)));
@@ -243,6 +276,7 @@ public sealed partial class MainViewModel : ViewModelBase, IDisposable
 
         await RefreshAsync();
         var errors = _log.ErrorCount - errorsBefore;
+        if (errors > 0) _log.Info("Something not right? Press FEEDBACK to report it; the log is included for you.");
         if (errors > 0) SetStatus($"{name} FINISHED WITH {errors} ISSUE(S) · SEE LOG", Hud.BadBrush);
         else if (!completed) SetStatus($"{name} CANCELED", Hud.TextDimBrush);
         else if (isPreflight) SetStatus("PREFLIGHT COMPLETE · CLEARED FOR LAUNCH", Hud.GoodBrush);

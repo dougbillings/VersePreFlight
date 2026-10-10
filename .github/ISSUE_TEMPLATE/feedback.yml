@@ -1,0 +1,18 @@
+name: General feedback
+description: Anything else about Verse Preflight (what you like, what's confusing, ...).
+body:
+  - type: textarea
+    id: description
+    attributes:
+      label: Your feedback
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: Verse Preflight version
+  - type: textarea
+    id: diagnostics
+    attributes:
+      label: Diagnostics (optional)
+      render: text

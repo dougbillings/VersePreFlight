@@ -16,6 +16,7 @@
         <DataTemplate DataType="vm:SetupViewModel"><v:SetupView /></DataTemplate>
         <DataTemplate DataType="vm:AboutViewModel"><v:AboutView /></DataTemplate>
         <DataTemplate DataType="vm:ConfirmViewModel"><v:ConfirmView /></DataTemplate>
+        <DataTemplate DataType="vm:FeedbackViewModel"><v:FeedbackView /></DataTemplate>
     </Window.DataTemplates>
 
     <Grid>
@@ -47,6 +48,8 @@
                             IsVisible="{Binding IsUpdateAvailable}" IsEnabled="{Binding !IsBusy}" />
                     <Button Classes="hud small" Content="REFRESH" Command="{Binding RefreshNowCommand}" IsEnabled="{Binding !IsBusy}" />
                     <Button Classes="hud small" Content="SETTINGS" Command="{Binding OpenSettingsCommand}" IsEnabled="{Binding !IsBusy}" />
+                    <Button Classes="hud small" Content="FEEDBACK" Command="{Binding OpenFeedbackCommand}"
+                            ToolTip.Tip="Report a bug, suggest an idea or send feedback" />
                     <Button Classes="hud small" Content="ABOUT" Command="{Binding OpenAboutCommand}" />
                 </StackPanel>
             </Grid>

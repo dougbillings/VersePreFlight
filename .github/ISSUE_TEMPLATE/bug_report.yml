@@ -1,0 +1,35 @@
+name: Bug report
+description: Something in Verse Preflight didn't work as expected.
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for reporting! Verse Preflight is an unofficial fan project. **Bugs in Star Citizen itself** belong on the official [Issue Council](https://issue-council.robertsspaceindustries.com), not here.
+
+        Tip: use the **FEEDBACK** button in the app; it fills in the version and diagnostics for you.
+  - type: textarea
+    id: description
+    attributes:
+      label: What happened?
+      description: What did you do, what did you expect, and what happened instead?
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      placeholder: |
+        1. Open Settings and ...
+        2. Press RUN PREFLIGHT ...
+  - type: input
+    id: version
+    attributes:
+      label: Verse Preflight version
+      placeholder: e.g. 0.1.0-alpha.1 (shown under the title in the app)
+  - type: textarea
+    id: diagnostics
+    attributes:
+      label: Diagnostics
+      description: Filled in by the app. Your Windows user name and PC name are replaced with placeholders.
+      render: text

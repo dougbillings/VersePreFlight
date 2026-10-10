@@ -1,0 +1,59 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:VersePreflight.App.ViewModels"
+             xmlns:c="using:VersePreflight.App.Controls"
+             xmlns:t="using:VersePreflight.App.Theme"
+             x:Class="VersePreflight.App.Views.FeedbackView"
+             x:DataType="vm:FeedbackViewModel">
+    <c:HudFrame Classes="panel" MaxWidth="1120" Padding="26,20">
+        <Grid RowDefinitions="Auto,*,Auto,Auto" ColumnDefinitions="*,28,*">
+            <TextBlock Grid.ColumnSpan="3" Classes="section" Text="// FEEDBACK &amp; ISSUES" Margin="0,0,0,14" />
+
+            <!-- Left: the report itself -->
+            <StackPanel Grid.Row="1" Spacing="12">
+                <StackPanel Spacing="4">
+                    <TextBlock Classes="label" Text="TYPE" />
+                    <StackPanel Orientation="Horizontal" Spacing="18">
+                        <RadioButton GroupName="kind" IsChecked="{Binding IsBug}" Content="Bug report" />
+                        <RadioButton GroupName="kind" IsChecked="{Binding IsFeature}" Content="Feature idea" />
+                        <RadioButton GroupName="kind" IsChecked="{Binding IsFeedback}" Content="General feedback" />
+                    </StackPanel>
+                </StackPanel>
+
+                <StackPanel Spacing="6">
+                    <TextBlock Classes="label" Text="TITLE" />
+                    <TextBox Text="{Binding Title}" FontFamily="{x:Static t:Hud.MonoFont}" MaxLength="120"
+                             PlaceholderText="A short summary" />
+                </StackPanel>
+
+                <StackPanel Spacing="6">
+                    <TextBlock Classes="label" Text="DETAILS" />
+                    <TextBox Text="{Binding Details}" AcceptsReturn="True" TextWrapping="Wrap" Height="170"
+                             VerticalContentAlignment="Top" PlaceholderText="{Binding DetailsHint}" />
+                </StackPanel>
+            </StackPanel>
+
+            <!-- Right: optional diagnostics, shown exactly as they will be shared -->
+            <StackPanel Grid.Row="1" Grid.Column="2" Spacing="6">
+                <CheckBox IsChecked="{Binding IncludeDiagnostics}" Content="Include diagnostics (recommended for bugs)" />
+                <TextBox Text="{Binding DiagnosticsPreview}" IsReadOnly="True" TextWrapping="NoWrap" Height="214"
+                         FontSize="11" VerticalContentAlignment="Top" />
+                <TextBlock Classes="dim" FontSize="12" TextWrapping="Wrap"
+                           Text="App version, Windows version, detected installs, settings and recent log lines. Your Windows user name and PC name are replaced with placeholders." />
+            </StackPanel>
+
+            <TextBlock Grid.Row="2" Grid.ColumnSpan="3" Classes="dim" FontSize="12" TextWrapping="Wrap" Margin="0,14,0,0"
+                       Text="OPEN ON GITHUB opens your browser with this report filled in; you review it and press Submit there (a free GitHub account is needed). No GitHub account? Use COPY REPORT and post it on Spectrum, Reddit or Discord. Verse Preflight itself never sends anything." />
+
+            <Grid Grid.Row="3" Grid.ColumnSpan="3" ColumnDefinitions="*,Auto" Margin="0,12,0,0">
+                <TextBlock Text="{Binding Message}" Foreground="{x:Static t:Hud.GoodBrush}" VerticalAlignment="Center" TextWrapping="Wrap" />
+                <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="10">
+                    <Button Classes="hud" Content="CANCEL" Command="{Binding CancelCommand}" MinWidth="110" />
+                    <Button Classes="hud" Content="COPY REPORT" Command="{Binding CopyReportCommand}" IsEnabled="{Binding CanSend}" />
+                    <Button Classes="hud primary" Content="OPEN ON GITHUB" Command="{Binding OpenOnGitHubCommand}" IsEnabled="{Binding CanSend}"
+                            MinWidth="200" MinHeight="46" FontSize="14" />
+                </StackPanel>
+            </Grid>
+        </Grid>
+    </c:HudFrame>
+</UserControl>
