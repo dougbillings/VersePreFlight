@@ -3,7 +3,14 @@ using System.Numerics;
 namespace VersePreflight.Core.Characters;
 
 /// <summary>Positions and triangle indices of a mesh.</summary>
-public sealed record MeshGeometry(Vector3[] Positions, int[] Indices);
+public sealed record MeshGeometry(Vector3[] Positions, int[] Indices, Vector2[] Uvs)
+{
+    /// <summary>Index ranges drawn with one material each (material id = index into the .mtl sub-materials).</summary>
+    public IReadOnlyList<Submesh> Submeshes { get; init; } = [];
+}
+
+/// <summary>A range of triangles using one material.</summary>
+public readonly record struct Submesh(int MaterialId, int FirstIndex, int IndexCount);
 
 /// <summary>
 /// Reads the geometry of a Star Citizen <c>.skinm</c> file (CryEngine "#ivo" chunk file with an
@@ -44,9 +51,16 @@ public static class SkinMeshReader
         var minBound = ReadVec3(d[48..]);   // MeshInfo.min_bound (the scaling box for quantized positions)
         var maxBound = ReadVec3(d[60..]);
         var extraCount = BitConverter.ToInt32(d[76..]);
+        var submeshes = new Submesh[numSubmeshes];
+        for (var s = 0; s < numSubmeshes; s++)
+        {
+            var sd = d[(4 + 76 + 88 + s * 48)..]; // mat id(2) node(2) first index(4) index count(4) ...
+            submeshes[s] = new Submesh(BitConverter.ToUInt16(sd), BitConverter.ToInt32(sd[4..]), BitConverter.ToInt32(sd[8..]));
+        }
         var p = 4 + 76 + 88 + numSubmeshes * 48 + extraCount * 4;
 
         Vector3[]? positions = null;
+        Vector2[]? uvs = null;
         int[]? indices = null;
         while (p + 8 <= d.Length && (positions is null || indices is null))
         {
@@ -60,9 +74,12 @@ public static class SkinMeshReader
             if (type is StreamVertsUvs or StreamVertsUvs2)
             {
                 positions = new Vector3[numVertices];
+                uvs = new Vector2[numVertices];
                 for (var i = 0; i < numVertices; i++)
                 {
                     var v = d[(p + i * elementSize)..];
+                    // The UV is the last 4 bytes of each vertex (two half floats) in both the 16- and 20-byte layouts
+                    uvs[i] = new Vector2((float)BitConverter.ToHalf(v[(elementSize - 4)..]), (float)BitConverter.ToHalf(v[(elementSize - 2)..]));
                     positions[i] = elementSize switch
                     {
                         20 => ReadVec3(v),
@@ -89,7 +106,7 @@ public static class SkinMeshReader
         }
 
         if (positions is null || indices is null) throw new InvalidDataException("Mesh is missing positions or indices.");
-        return new MeshGeometry(positions, indices);
+        return new MeshGeometry(positions, indices, uvs ?? new Vector2[positions.Length]) { Submeshes = submeshes };
     }
 
     private static Vector3 ReadVec3(ReadOnlySpan<byte> s) =>

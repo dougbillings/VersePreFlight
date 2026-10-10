@@ -1,4 +1,3 @@
-using System.Numerics;
 using System.Runtime.InteropServices;
 using Avalonia;
 using Avalonia.Controls;
@@ -17,11 +16,8 @@ namespace VersePreflight.App.Controls;
 /// </summary>
 public sealed class HeadViewer : Control
 {
-    public static readonly StyledProperty<Vector3[]?> PositionsProperty =
-        AvaloniaProperty.Register<HeadViewer, Vector3[]?>(nameof(Positions));
-
-    public static readonly StyledProperty<int[]?> IndicesProperty =
-        AvaloniaProperty.Register<HeadViewer, int[]?>(nameof(Indices));
+    public static readonly StyledProperty<IReadOnlyList<MeshPart>?> PartsProperty =
+        AvaloniaProperty.Register<HeadViewer, IReadOnlyList<MeshPart>?>(nameof(Parts));
 
     private const float DefaultYaw = 0.35f, DefaultPitch = 0.05f;
 
@@ -46,8 +42,8 @@ public sealed class HeadViewer : Control
         _idleTimer.Tick += (_, _) => { _idleTimer.Stop(); _interacting = false; InvalidateVisual(); };
     }
 
-    public Vector3[]? Positions { get => GetValue(PositionsProperty); set => SetValue(PositionsProperty, value); }
-    public int[]? Indices { get => GetValue(IndicesProperty); set => SetValue(IndicesProperty, value); }
+    /// <summary>What to draw; the first part (the head) frames the camera.</summary>
+    public IReadOnlyList<MeshPart>? Parts { get => GetValue(PartsProperty); set => SetValue(PartsProperty, value); }
 
     public void ResetView()
     {
@@ -58,11 +54,9 @@ public sealed class HeadViewer : Control
     protected override void OnPropertyChanged(AvaloniaPropertyChangedEventArgs change)
     {
         base.OnPropertyChanged(change);
-        if (change.Property == PositionsProperty || change.Property == IndicesProperty)
+        if (change.Property == PartsProperty)
         {
-            // Positions and indices arrive separately; only use them once both match
-            if (Positions is { } p && Indices is { } i && i.Length > 0 && i.Max() < p.Length) _renderer.SetMesh(p, i);
-            else _renderer.SetMesh([], []);
+            _renderer.SetParts(Parts ?? []);
             InvalidateVisual();
         }
     }

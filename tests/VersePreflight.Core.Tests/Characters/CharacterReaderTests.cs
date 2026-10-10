@@ -10,7 +10,57 @@ public class CharacterReaderTests
 {
     // ---------- .chf ----------
 
-    private static byte[] BuildChf(uint bodyHash, (int Head, ushort Value)[][] parts, bool corruptCrc = false)
+    /// <summary>Appends a loadout and materials like the game writes them (see StarBreaker's format notes).</summary>
+    private static void WriteAppearance(BinaryWriter w)
+    {
+        static uint H(string s) => CharacterFile.Hash(s);
+        // Loadout: total count, then body -> head -> hair
+        w.Write(3UL);
+        w.Write(H("body_itemport")); w.Write(Guid.Empty.ToByteArray()); w.Write(1u); w.Write(0u);
+        w.Write(H("head_itemport")); w.Write(Guid.Empty.ToByteArray()); w.Write(1u); w.Write(0u);
+        w.Write(H("hair_itemport")); w.Write(new Guid("ce9137d2-9c06-412a-ab90-5da4e988902b").ToByteArray()); w.Write(0u); w.Write(0u);
+        w.Write(5u);
+
+        void Material(uint name, string sub, (string, float)[] floats, (uint, byte, byte, byte)[] colors, bool last)
+        {
+            w.Write(name); w.Write(new byte[16]); w.Write(0u); w.Write(new byte[16]); w.Write(1u); w.Write(5u);
+            w.Write(H(sub)); w.Write(0u);
+            w.Write((ulong)floats.Length); foreach (var (n, v) in floats) { w.Write(H(n)); w.Write(v); w.Write(0u); }
+            w.Write((ulong)colors.Length); foreach (var (n, r, g, b) in colors) { w.Write(n); w.Write(r); w.Write(g); w.Write(b); w.Write((byte)255); w.Write(0u); }
+            if (!last) w.Write(5u);
+        }
+        Material(0xA98BEB34, "shader_head", [("FrecklesAmount", 0.5f)], [(0xBD530797, 0x3a, 0x2b, 0x26)], false);
+        Material(0x6C836947, "hair_21_m", [("DyeAmount", 1f), ("BaseMelanin", 0f)], [(0x15E90814, 0x44, 0x62, 0xd0)], false);
+        Material(0xA047885E, "shader_eyeInner", [], [(0x442A34AC, 0x2d, 0x32, 0x11)], true);
+    }
+
+    [Fact]
+    public void CharacterFile_ReadsColoursHairAndLoadout()
+    {
+        var chf = CharacterFile.Parse(BuildChf(1, [[(0, 65535)]], appearance: true));
+
+        Assert.Equal(new CharacterColor(0x3a, 0x2b, 0x26), chf.SkinColor);
+        Assert.Equal(new CharacterColor(0x2d, 0x32, 0x11), chf.EyeColor);
+        Assert.NotNull(chf.Hair);
+        Assert.Equal(CharacterFile.Hash("hair_21_m"), chf.Hair.StyleHash);
+        Assert.Equal(new CharacterColor(0x44, 0x62, 0xd0).ToVector(), chf.Hair.DisplayColor); // fully dyed
+        Assert.Equal(new Guid("ce9137d2-9c06-412a-ab90-5da4e988902b"), chf.Loadout[CharacterFile.Hash("hair_itemport")]);
+        Assert.Null(chf.Beard);
+    }
+
+    [Fact]
+    public void CharacterFile_StillReadsFaceWhenAppearanceIsMissing()
+    {
+        var chf = CharacterFile.Parse(BuildChf(1, [[(3, 65535)]]));
+        Assert.Null(chf.SkinColor);
+        Assert.Equal(3, chf.FaceParts[0][0].HeadId);
+    }
+
+    [Fact]
+    public void Hash_IsCrc32COfName() =>
+        Assert.Equal(CharacterFile.Crc32C(Encoding.UTF8.GetBytes("EyeMaterial")), CharacterFile.Hash("EyeMaterial"));
+
+    private static byte[] BuildChf(uint bodyHash, (int Head, ushort Value)[][] parts, bool corruptCrc = false, bool appearance = false)
     {
         var dna = new MemoryStream(); var w = new BinaryWriter(dna);
         w.Write(0xFCD09394u); w.Write(bodyHash); w.Write(0x12345678u); w.Write(0u);
@@ -25,7 +75,8 @@ public class CharacterReaderTests
         var payload = new MemoryStream(); var pw = new BinaryWriter(payload);
         pw.Write(2u); pw.Write(8u); pw.Write(new byte[16]); pw.Write(new byte[16]);
         pw.Write((ulong)dna.Length); pw.Write(dna.ToArray());
-        pw.Write(new byte[32]); // rest of the character data isn't read
+        if (appearance) WriteAppearance(pw);
+        else pw.Write(new byte[32]); // no loadout/materials: only the face is read
 
         var compressed = new Compressor().Wrap(payload.ToArray()).ToArray();
         var file = new byte[CharacterFile.FileSize];
@@ -100,16 +151,26 @@ public class CharacterReaderTests
 
     // ---------- .skinm ----------
 
-    internal static byte[] BuildSkin(Vector3[] positions, int[] indices)
+    internal static byte[] BuildSkin(Vector3[] positions, int[] indices, Vector2[]? uvs = null, (int Material, int First, int Count)[]? submeshes = null)
     {
+        submeshes ??= [];
         var skin = new MemoryStream(); var w = new BinaryWriter(skin);
         w.Write(0u);                                          // flags
-        w.Write(0u); w.Write(positions.Length); w.Write(indices.Length); w.Write(0); w.Write(0); // MeshInfo start, 0 submeshes
+        w.Write(0u); w.Write(positions.Length); w.Write(indices.Length); w.Write(submeshes.Length); w.Write(0); // MeshInfo start
         for (var i = 0; i < 12; i++) w.Write(0f);             // model and scaling bounds
         w.Write(0u); w.Write(0);                              // vertex format, extra count
         w.Write(new byte[88]);
-        w.Write(0x91329AE9u); w.Write(20);                     // float vertices: xyz + colour + uv
-        foreach (var p in positions) { w.Write(p.X); w.Write(p.Y); w.Write(p.Z); w.Write(0u); w.Write(0u); }
+        foreach (var (material, first, count) in submeshes)  // 48-byte submesh descriptors
+        {
+            w.Write((ushort)material); w.Write((ushort)0); w.Write(first); w.Write(count);
+            w.Write(new byte[36]);
+        }
+        w.Write(0x91329AE9u); w.Write(20);                     // float vertices: xyz + colour + uv (two halves)
+        for (var i = 0; i < positions.Length; i++)
+        {
+            var p = positions[i]; var uv = uvs?[i] ?? Vector2.Zero;
+            w.Write(p.X); w.Write(p.Y); w.Write(p.Z); w.Write(0u); w.Write((Half)uv.X); w.Write((Half)uv.Y);
+        }
         while (skin.Length % 8 != 0) w.Write((byte)0);
         w.Write(0xEECDC168u); w.Write(2);                      // u16 indices
         foreach (var i in indices) w.Write((ushort)i);
@@ -153,7 +214,7 @@ public class CharacterReaderTests
         Vector3[] baseHead = [Vector3.Zero, Vector3.Zero];
         Vector3[] headA = [new(1, 0, 0), new(1, 0, 0)];
         Vector3[] headB = [new(0, 2, 0), new(0, 2, 0)];
-        var lib = new HeadLibrary("test", 7, [0, 1, 1], [baseHead, headA, headB], [1, 0.5f, 0, 0.5f], 2);
+        var lib = new HeadLibrary("test", 7, new BlendSet([0, 1, 1], [baseHead, headA, headB], [1, 0.5f, 0, 0.5f], 2), null);
         var chf = new CharacterFile(7, [[new DnaBlend(1, 1)], [new DnaBlend(2, 0.5f), new DnaBlend(1, 0.5f)]]);
 
         var result = lib.Blend(chf);
@@ -171,7 +232,7 @@ public class CharacterReaderTests
     public void HeadLibrary_UsesBaseForMissingHeadsAndRegions()
     {
         Vector3[] baseHead = [new(5, 5, 5)];
-        var lib = new HeadLibrary("test", 7, [0, 0, 0], [baseHead, null], [0.5f, 0.5f], 2);
+        var lib = new HeadLibrary("test", 7, new BlendSet([0, 0, 0], [baseHead, null], [0.5f, 0.5f], 2), null);
         var chf = new CharacterFile(7, [[new DnaBlend(1, 1)]]); // head 1 has no mesh; region 1 has no recipe
 
         Assert.Equal(new Vector3(5, 5, 5), lib.Blend(chf)[0]);

@@ -592,5 +592,6 @@ public sealed partial class MainViewModel : ViewModelBase, IDisposable
         _gameTimer.Stop();
         _log.EntryWritten -= OnLogEntry;
         _http.Dispose();
+        Characters.Dispose();
     }
 }

@@ -2,6 +2,7 @@ using System.Collections.ObjectModel;
 using System.Numerics;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
+using VersePreflight.App.Rendering;
 using VersePreflight.App.Services;
 using VersePreflight.Core.Characters;
 using VersePreflight.Core.Game;
@@ -19,10 +20,11 @@ public sealed record CharacterItemViewModel(string Name, string Path, DateTime M
 /// Experimental character viewer: lists the player's custom characters and rebuilds the selected
 /// one's head shape from their own game files.
 /// </summary>
-public sealed partial class CharactersViewModel(PreflightLog log, IUiServices ui, string cacheDirectory) : ViewModelBase
+public sealed partial class CharactersViewModel(PreflightLog log, IUiServices ui, string cacheDirectory) : ViewModelBase, IDisposable
 {
     private readonly HeadLibraryCache _cache = new(cacheDirectory);
     private Task<List<HeadLibrary>>? _librariesTask;
+    private Task<AccessoryLibrary?>? _accessoriesTask;
     private string? _librariesKey;
     private IReadOnlyList<GameEnvironment> _environments = [];
     private int _loadVersion;
@@ -30,17 +32,16 @@ public sealed partial class CharactersViewModel(PreflightLog log, IUiServices ui
     public ObservableCollection<CharacterItemViewModel> Characters { get; } = [];
 
     [ObservableProperty] public partial CharacterItemViewModel? Selected { get; set; }
-    [ObservableProperty] public partial Vector3[]? Positions { get; set; }
-    [ObservableProperty] public partial int[]? Indices { get; set; }
+    [ObservableProperty] public partial IReadOnlyList<MeshPart>? Parts { get; set; }
     [ObservableProperty] public partial string Message { get; set; } = "Select a character.";
     [ObservableProperty] public partial bool IsLoading { get; set; }
     [ObservableProperty] public partial string Title { get; set; } = "";
     [ObservableProperty] public partial string Subtitle { get; set; } = "";
     [ObservableProperty] public partial bool HasCharacters { get; set; }
 
-    public bool HasModel => Positions is not null;
+    public bool HasModel => Parts is not null;
 
-    partial void OnPositionsChanged(Vector3[]? value) => OnPropertyChanged(nameof(HasModel));
+    partial void OnPartsChanged(IReadOnlyList<MeshPart>? value) => OnPropertyChanged(nameof(HasModel));
 
     /// <summary>Lists .chf files from the link folder and every install's CustomCharacters folder.</summary>
     public void Refresh(IReadOnlyList<GameEnvironment> environments, string? linkRoot)
@@ -105,26 +106,25 @@ public sealed partial class CharactersViewModel(PreflightLog log, IUiServices ui
             var library = libraries?.FirstOrDefault(l => l.BodyHash == character.BodyHash);
             if (library is null)
             {
-                Positions = null;
+                Parts = null;
                 Message = libraries is null
                     ? "No game install with a Data.p4k was found. Check the game folder in Settings."
                     : "This character's body type isn't supported yet.";
                 return;
             }
 
-            var positions = await Task.Run(() => library.Blend(character));
+            var accessories = await (_accessoriesTask ?? Task.FromResult<AccessoryLibrary?>(null));
+            var parts = await Task.Run(() => BuildParts(library, character, accessories));
             if (version != _loadVersion) return;
-            Positions = null;          // clear first so the viewer never pairs new indices with old positions
-            Indices = library.Indices;
-            Positions = positions;
-            Subtitle = $"{(library.IsFemale ? "FEMALE" : "MALE")}  ·  {character.FaceParts.Count} FACE REGIONS";
+            Parts = parts;
+            Subtitle = $"{(library.IsFemale ? "FEMALE" : "MALE")}  ·  SKIN {character.SkinColor?.ToString() ?? "?"}  ·  EYES {character.EyeColor?.ToString() ?? "?"}";
             Message = "";
         }
         catch (Exception e)
         {
             // This runs fire-and-forget from a selection change, so every failure must be shown, not lost
             if (version != _loadVersion) return;
-            Positions = null;
+            Parts = null;
             Message = $"Couldn't show this character: {e.Message}";
             log.Warning($"Character viewer: {item.Name}: {e.GetType().Name}: {e.Message}");
         }
@@ -132,6 +132,44 @@ public sealed partial class CharactersViewModel(PreflightLog log, IUiServices ui
         {
             if (version == _loadVersion) IsLoading = false;
         }
+    }
+
+    /// <summary>The head in the character's skin tone, the eyes, and the equipped hair, beard and eyebrows.</summary>
+    private List<MeshPart> BuildParts(HeadLibrary library, CharacterFile character, AccessoryLibrary? accessories)
+    {
+        var head = library.Head.Blend(character);
+        var skin = character.SkinColor?.ToVector() ?? CharacterColoring.DefaultSkin;
+        var parts = new List<MeshPart> { new(head, library.Head.Indices, CharacterColoring.Uniform(head.Length, skin), Specular: 0.10f, Gloss: 24f) };
+        if (library.Eyes is { } eyesSet)
+        {
+            var eyes = eyesSet.Blend(character);
+            var iris = character.EyeColor?.ToVector() ?? new Vector3(0.35f, 0.25f, 0.15f);
+            parts.Add(new MeshPart(eyes, eyesSet.Indices, CharacterColoring.Eyes(eyes, iris), Specular: 0.6f, Gloss: 90f));
+        }
+        if (accessories is null) return parts;
+
+        try
+        {
+            foreach (var (kind, item) in accessories.LoadFor(character, library.IsFemale))
+            {
+                var choice = kind switch { AccessoryKind.Beard => character.Beard, AccessoryKind.Eyebrows => character.Eyebrows, _ => character.Hair };
+                var color = choice?.DisplayColor ?? new Vector3(0.06f, 0.045f, 0.035f);
+                var colors = CharacterColoring.Uniform(item.Mesh.Positions.Length, color);
+                foreach (var layer in item.Layers)
+                    parts.Add(new MeshPart(item.Mesh.Positions, layer.Indices, colors, Specular: 0.18f, Gloss: 18f)
+                    {
+                        Uvs = item.Mesh.Uvs,
+                        Opacity = layer.Opacity,
+                        AlphaCutoff = 0.15f, // keep more of each strand so hair reads as full, not wispy
+                        TwoSided = true,
+                    });
+            }
+        }
+        catch (Exception e) when (e is IOException or InvalidDataException or NotSupportedException)
+        {
+            log.Warning($"Character viewer: couldn't load hair for this character: {e.Message}");
+        }
+        return parts;
     }
 
     /// <summary>Head data comes from the first install with a Data.p4k (LIVE preferred), cached per game build.</summary>
@@ -149,6 +187,9 @@ public sealed partial class CharactersViewModel(PreflightLog log, IUiServices ui
             var p4k = System.IO.Path.Combine(env.Path, "Data.p4k");
             _librariesKey = key;
             _librariesTask = Task.Run(() => _cache.GetOrBuild(p4k, key));
+            var old = _accessoriesTask;
+            _accessoriesTask = Task.Run(() => OpenAccessories(p4k, key));
+            if (old is not null) (await old)?.Dispose();
             var libraries = await _librariesTask;
             log.Info($"Character viewer: head data ready ({string.Join(", ", libraries.Select(l => l.IsFemale ? "female" : "male"))}).");
         }
@@ -161,6 +202,27 @@ public sealed partial class CharactersViewModel(PreflightLog log, IUiServices ui
             _librariesTask = null; // allow a retry next time
             throw;
         }
+    }
+
+    /// <summary>Hair, beard and eyebrows are optional: a failure here never stops the head from showing.</summary>
+    private AccessoryLibrary? OpenAccessories(string p4k, string key)
+    {
+        try
+        {
+            var library = AccessoryLibrary.Open(p4k, cacheDirectory, key);
+            log.Info($"Character viewer: hair and facial hair ready ({library.ItemCount} items).");
+            return library;
+        }
+        catch (Exception e) when (e is IOException or InvalidDataException or NotSupportedException or UnauthorizedAccessException)
+        {
+            log.Warning($"Character viewer: hair isn't available: {e.Message}");
+            return null;
+        }
+    }
+
+    public void Dispose()
+    {
+        if (_accessoriesTask is { IsCompletedSuccessfully: true } t) t.Result?.Dispose();
     }
 
     [RelayCommand]

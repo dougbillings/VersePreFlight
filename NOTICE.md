@@ -36,6 +36,8 @@ and apply to every contribution and release:
 |---|---|---|
 | [StarStrings](https://github.com/MrKraken/StarStrings) (downloaded at run time, optional) | MrKraken | See the project; unofficial fan localization |
 | [.NET](https://github.com/dotnet/runtime) | .NET Foundation | MIT |
+| [StarBreaker](https://github.com/diogotr7/StarBreaker): game file format knowledge (archive, meshes, character files, binary XML, game database), ported to C# where noted in the source | diogotr7 | MIT |
+| [ZstdSharp](https://github.com/oleg-st/ZstdSharp) | Oleg Stepanischev | MIT |
 | [Avalonia](https://github.com/AvaloniaUI/Avalonia) | AvaloniaUI OÜ | MIT |
 | [SkiaSharp](https://github.com/mono/SkiaSharp) (via Avalonia; also used to generate the icon) | Microsoft | MIT |
 | [Velopack](https://github.com/velopack/velopack) (installer and updates) | Velopack Ltd | MIT |

@@ -46,7 +46,7 @@
                 </Grid>
 
                 <Panel Grid.Row="1" Margin="0,8">
-                    <c:HeadViewer x:Name="Viewer" Positions="{Binding Positions}" Indices="{Binding Indices}" />
+                    <c:HeadViewer x:Name="Viewer" Parts="{Binding Parts}" />
                     <StackPanel VerticalAlignment="Center" HorizontalAlignment="Center" Spacing="10" MaxWidth="420"
                                 IsVisible="{Binding !HasModel}">
                         <ProgressBar Classes="busy" IsIndeterminate="True" Width="220" IsVisible="{Binding IsLoading}" />
@@ -57,7 +57,7 @@
 
                 <Grid Grid.Row="2" ColumnDefinitions="*,Auto">
                     <TextBlock Classes="dim" FontSize="12" TextWrapping="Wrap" VerticalAlignment="Center"
-                               Text="Head shape rebuilt from your own game files. Skin, eyes and hair aren't shown yet. Drag to rotate · scroll or pinch to zoom · double-tap to reset." />
+                               Text="Head, skin tone, eyes and hair rebuilt from your own game files. Skin texture and makeup aren't shown yet; hair colour is approximate. Drag to rotate · scroll or pinch to zoom · double-tap to reset." />
                     <Button Grid.Column="1" Classes="hud small" Content="RESET VIEW" Click="OnResetView" Margin="12,0,0,0" />
                 </Grid>
             </Grid>

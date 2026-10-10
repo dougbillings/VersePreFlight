@@ -42,9 +42,10 @@ public sealed class HeadDnaFile
         var slotCount = BitConverter.ToUInt16(d[0x2A..]);
         var vertices = BitConverter.ToUInt16(d[0x30..]);
 
+        // Eye/teeth DNA files have no name list of their own (they share the head's); the offset is 0 then
         var slotsAt = (int)BitConverter.ToUInt64(d[(0x40 + SectionHeadSlots * 8)..]);
-        var slots = new string[slotCount];
-        for (var i = 0; i < slotCount; i++)
+        var slots = new string[slotsAt == 0 ? 0 : slotCount];
+        for (var i = 0; i < slots.Length; i++)
             slots[i] = Encoding.ASCII.GetString(d.Slice(slotsAt + i * SlotSize, SlotSize)).Split('\0')[0];
 
         var maskAt = (int)BitConverter.ToUInt64(d[(0x40 + SectionRegionMask * 8)..]);

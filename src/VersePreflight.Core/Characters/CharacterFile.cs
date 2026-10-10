@@ -1,4 +1,5 @@
 using System.Numerics;
+using System.Text;
 using ZstdSharp;
 
 namespace VersePreflight.Core.Characters;
@@ -6,15 +7,52 @@ namespace VersePreflight.Core.Characters;
 /// <summary>One face part's recipe: up to four preset heads and how much of each.</summary>
 public readonly record struct DnaBlend(int HeadId, float Weight);
 
+/// <summary>An sRGB colour from a character file, 0-255 per channel.</summary>
+public readonly record struct CharacterColor(byte R, byte G, byte B)
+{
+    public Vector3 ToVector() => new(R / 255f, G / 255f, B / 255f);
+    public override string ToString() => $"#{R:x2}{G:x2}{B:x2}";
+}
+
+/// <summary>Hair, beard or eyebrow choice: the style (hashed name) and how it's coloured.</summary>
+public sealed record HairChoice(uint StyleHash, CharacterColor DyeColor, float DyeAmount, float Melanin, float Redness)
+{
+    /// <summary>Second dye colour (the dye fades from the first to the second along the strands).</summary>
+    public CharacterColor DyeColor2 { get; init; }
+
+    /// <summary>
+    /// Approximate visible colour: a dark natural base (with any redness), mixed with the dye colours by
+    /// the dye amount. The game's own hair shader is more complex; this is a viewer approximation.
+    /// </summary>
+    public Vector3 DisplayColor
+    {
+        get
+        {
+            var natural = Vector3.Lerp(new Vector3(0.06f, 0.045f, 0.035f), new Vector3(0.30f, 0.09f, 0.04f), Math.Clamp(Redness, 0, 1));
+            var dye = DyeColor2 == default ? DyeColor.ToVector() : Vector3.Lerp(DyeColor.ToVector(), DyeColor2.ToVector(), 0.5f);
+            return Vector3.Lerp(natural, dye, Math.Clamp(DyeAmount, 0, 1));
+        }
+    }
+}
+
 /// <summary>
-/// The parts of a custom character (<c>.chf</c>) that Verse Preflight reads: the body type
-/// (as the hash the game uses to pick the head data) and the face DNA.
-/// Format knowledge from StarBreaker's starbreaker-chf (MIT, diogotr7). Files are only read, never written.
+/// The parts of a custom character (<c>.chf</c>) that Verse Preflight reads: body type, face DNA,
+/// colours and hair choices. Format knowledge from StarBreaker's starbreaker-chf (MIT, diogotr7).
+/// Files are only read, never written.
 /// </summary>
 public sealed record CharacterFile(uint BodyHash, IReadOnlyList<DnaBlend[]> FaceParts)
 {
     public const int FileSize = 4096;
     private const ushort Magic = 0x4242; // "BB"
+
+    public CharacterColor? SkinColor { get; init; }
+    public CharacterColor? EyeColor { get; init; }
+    public HairChoice? Hair { get; init; }
+    public HairChoice? Beard { get; init; }
+    public HairChoice? Eyebrows { get; init; }
+
+    /// <summary>Equipped items by item port name hash (e.g. hair_itemport -> item GUID).</summary>
+    public IReadOnlyDictionary<uint, Guid> Loadout { get; init; } = new Dictionary<uint, Guid>();
 
     public static CharacterFile Read(string path) => Parse(File.ReadAllBytes(path));
 
@@ -37,10 +75,24 @@ public sealed record CharacterFile(uint BodyHash, IReadOnlyList<DnaBlend[]> Face
         var p = 4 + 4 + 16 + 16;
         var dnaSize = (int)BitConverter.ToUInt64(d, p);
         p += 8;
-        var dna = d.AsSpan(p, dnaSize);
+        var (bodyHash, parts) = ParseDna(d.AsSpan(p, dnaSize));
+        p += dnaSize;
 
-        // DNA: "dna matrix 1.0" hash(4), body hash(4), variant hash(4), zero(4),
-        //      part count(2), blends per part(2), unknown(2), max head id(2), then blends
+        var character = new CharacterFile(bodyHash, parts);
+        try
+        {
+            return ParseAppearance(character, d, p);
+        }
+        catch (Exception e) when (e is ArgumentOutOfRangeException or ArgumentException or InvalidDataException)
+        {
+            return character; // the face shape is still usable if the rest has an unexpected layout
+        }
+    }
+
+    private static (uint BodyHash, DnaBlend[][] Parts) ParseDna(ReadOnlySpan<byte> dna)
+    {
+        // "dna matrix 1.0" hash(4), body hash(4), variant hash(4), zero(4),
+        // part count(2), blends per part(2), unknown(2), max head id(2), then blends
         var bodyHash = BitConverter.ToUInt32(dna[4..]);
         var partCount = BitConverter.ToUInt16(dna[16..]);
         var blendsPerPart = BitConverter.ToUInt16(dna[18..]);
@@ -54,10 +106,106 @@ public sealed record CharacterFile(uint BodyHash, IReadOnlyList<DnaBlend[]> Face
             var headId = BitConverter.ToUInt16(dna[(26 + i * 4)..]);
             if (value > 0) parts[i % partCount].Add(new DnaBlend(headId, value / 65535f));
         }
-        return new CharacterFile(bodyHash, parts.Select(l => l.ToArray()).ToList());
+        return (bodyHash, parts.Select(l => l.ToArray()).ToArray());
     }
 
-    /// <summary>CRC-32C (Castagnoli), as used by the .chf container.</summary>
+    private static CharacterFile ParseAppearance(CharacterFile character, byte[] d, int p)
+    {
+        // Loadout: u64 total port count, then a tree of (name hash, item guid, child count, tail count, children...)
+        p += 8;
+        var loadout = new Dictionary<uint, Guid>();
+        ReadItemPort(d, ref p, loadout);
+        if (BitConverter.ToUInt32(d, p) != 5) throw new InvalidDataException("Unexpected material marker.");
+        p += 4;
+
+        var materials = new Dictionary<uint, List<SubMaterial>>();
+        while (p + 4 <= d.Length && BitConverter.ToUInt32(d, p) != 0)
+        {
+            var (name, subs) = ReadMaterial(d, ref p);
+            materials[name] = subs;
+        }
+
+        CharacterColor? Color(uint material, uint param) =>
+            materials.TryGetValue(material, out var subs) && subs.Count > 0 && subs[0].Colors.TryGetValue(param, out var c) ? c : null;
+
+        HairChoice? Hair(uint material)
+        {
+            if (!materials.TryGetValue(material, out var subs) || subs.Count == 0) return null;
+            var s = subs[0];
+            float F(string n, float fallback) => s.Floats.TryGetValue(Hash(n), out var v) ? v : fallback;
+            return new HairChoice(s.Name, s.Colors.GetValueOrDefault(Ids.HairDyeColor1), F("DyeAmount", 0), F("BaseMelanin", 0.5f), F("BaseMelaninRedness", 0)) { DyeColor2 = s.Colors.GetValueOrDefault(Ids.HairDyeColor2) };
+        }
+
+        return character with
+        {
+            Loadout = loadout,
+            SkinColor = Color(Ids.HeadMaterial, Ids.BodyColor),
+            EyeColor = Color(Ids.EyeMaterial, Ids.EyeColor),
+            Hair = Hair(Ids.HairDyeMaterial),
+            Beard = Hair(Ids.BeardDyeMaterial),
+            Eyebrows = Hair(Ids.EyebrowDyeMaterial),
+        };
+    }
+
+    private static void ReadItemPort(byte[] d, ref int p, Dictionary<uint, Guid> loadout)
+    {
+        var name = BitConverter.ToUInt32(d, p);
+        var id = new Guid(d.AsSpan(p + 4, 16));
+        var children = BitConverter.ToUInt32(d, p + 20);
+        p += 28; // name, guid, child count, tail count
+        if (id != Guid.Empty) loadout[name] = id;
+        if (children > 64) throw new InvalidDataException("Unexpected loadout layout.");
+        for (var i = 0; i < children; i++) ReadItemPort(d, ref p, loadout);
+    }
+
+    private sealed record SubMaterial(uint Name, Dictionary<uint, float> Floats, Dictionary<uint, CharacterColor> Colors);
+
+    private static (uint Name, List<SubMaterial> Subs) ReadMaterial(byte[] d, ref int p)
+    {
+        // name hash, base material guid, flags, empty guid, sub-material count, marker 5
+        var name = BitConverter.ToUInt32(d, p);
+        var subCount = BitConverter.ToUInt32(d, p + 4 + 16 + 4 + 16);
+        p += 4 + 16 + 4 + 16 + 4 + 4;
+        var subs = new List<SubMaterial>();
+        for (var i = 0; i < subCount; i++)
+        {
+            var subName = BitConverter.ToUInt32(d, p);
+            var textures = BitConverter.ToUInt32(d, p + 4);
+            p += 8 + (int)textures * 21; // texture: zero(4) index(1) guid(16)
+            var floats = new Dictionary<uint, float>();
+            var floatCount = (int)BitConverter.ToUInt64(d, p); p += 8;
+            for (var f = 0; f < floatCount; f++, p += 12) floats[BitConverter.ToUInt32(d, p)] = BitConverter.ToSingle(d, p + 4);
+            var colors = new Dictionary<uint, CharacterColor>();
+            var colorCount = (int)BitConverter.ToUInt64(d, p); p += 8;
+            for (var c = 0; c < colorCount; c++, p += 12) colors[BitConverter.ToUInt32(d, p)] = new CharacterColor(d[p + 4], d[p + 5], d[p + 6]);
+            subs.Add(new SubMaterial(subName, floats, colors));
+            // Groups are separated by a 5 marker (absent after the very last sub-material in the file)
+            if (p + 4 <= d.Length && BitConverter.ToUInt32(d, p) == 5) p += 4;
+        }
+        return (name, subs);
+    }
+
+    /// <summary>
+    /// Fixed ids the game uses for material and colour names. Unlike parameter and style names,
+    /// these aren't CRC-32C of the readable name (mapping from StarBreaker's name_hash.rs, MIT).
+    /// </summary>
+    internal static class Ids
+    {
+        public const uint HeadMaterial = 0xA98BEB34;
+        public const uint HairDyeMaterial = 0x6C836947;
+        public const uint EyebrowDyeMaterial = 0x078AC8BD;
+        public const uint EyeMaterial = 0xA047885E;
+        public const uint BeardDyeMaterial = 0x9B274D93;
+        public const uint BodyColor = 0xBD530797;
+        public const uint EyeColor = 0x442A34AC;
+        public const uint HairDyeColor1 = 0x15E90814;
+        public const uint HairDyeColor2 = 0xA2C7C909;
+    }
+
+    /// <summary>The game's name hash for parameter and style names: CRC-32C of the exact name.</summary>
+    public static uint Hash(string name) => Crc32C(Encoding.UTF8.GetBytes(name));
+
+    /// <summary>CRC-32C (Castagnoli), as used by the .chf container and name hashes.</summary>
     internal static uint Crc32C(ReadOnlySpan<byte> data)
     {
         var crc = 0xFFFFFFFFu;
