@@ -66,3 +66,17 @@ Prototype scripts (C# file-based apps, run with `dotnet run <file>.cs`). Paths p
 - `idtest.cs` and `idtest_big.cs`: compare head-id hypotheses against reference images (`starcharsheet.cs` downloads
   them locally; they are not committed)
 - `dnaprobe.cs`, `dnamap.cs`, `dnacount.cs`, `dnacounts.cs`, `dnastrings.cs`, `dnamask.cs`, `dnaheads.cs`, `dnaids.cs`, `order.cs`: format exploration
+
+## Skin texture and hair colour (2026-10-10)
+
+- Skin: the .chf HeadMaterial GUID is a DataCore id. In Game2.dcb instance data it sits in the 16 bytes before a
+  4-byte table1 offset to `..._head_material.mtl`; that mtl's TexSlot1 is the DXT1 diffuse (2048², split mips).
+  Rendered as texture × (BodyColor / texture mean) in linear light, so the tone stays the player's choice.
+- Hair melanin: .chf BaseMelanin 0 = use the style mtl's BaseMelanin (e.g. m_hair_30 0.672, m_hair_24 0.928).
+  The style mtls also carry their own DyeAmount/DyeColor/DyeFadeout; the .chf dye values replace them.
+- Melanin → colour uses the physically based model (concentration = -ln(1-m); eu/pheo absorption,
+  colour = exp(-sqrt(σ)·4)). The linear table made 0.67 mid-brown, which is far too light compared with the game.
+- Dye: tip-side, as confirmed by gomabptu's beard (white dye 1, black dye 2, amount 0.28 → grey-white at the bottom tips)
+  and redshirt (black dye 1, red dye 2, amount 0.11 → red twists at the top). A black colour means "none" when the other
+  is set. The visible reach is wider than the raw amount; √amount matched the shots better.
+- Still missing: scalp/stubble shadow on shaved areas, makeup, freckles; gomabptu's grey beard tips are faint.

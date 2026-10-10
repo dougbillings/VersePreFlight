@@ -130,6 +130,53 @@ public class FormatReaderTests
         Assert.DoesNotContain(shipId, names.Keys);
     }
 
+    [Fact]
+    public void GameDatabase_FindsMaterialPathsByIdBeforeTheReference()
+    {
+        var skinId = Guid.NewGuid();
+        var table1 = Encoding.UTF8.GetBytes("objects/x/body.mtl\0objects/heads/male13_t1_head_material.mtl\0");
+        var table2 = Encoding.UTF8.GetBytes("unused\0");
+
+        var ms = new MemoryStream(); var w = new BinaryWriter(ms);
+        w.Write(0u); w.Write(8); w.Write(0); w.Write(0);
+        for (var i = 0; i < 24; i++) w.Write(0);
+        w.Write(table1.Length); w.Write(table2.Length);
+        w.Write(table1); w.Write(table2);
+        // Instance data: an unrelated reference, then the skin material's id followed by its path offset
+        w.Write(Guid.NewGuid().ToByteArray()); w.Write(0);
+        w.Write(skinId.ToByteArray()); w.Write(19);
+
+        var paths = GameDatabase.FindMaterialPaths(ms.ToArray(), "_head_material.mtl");
+
+        Assert.Equal("objects/heads/male13_t1_head_material.mtl", Assert.Single(paths).Value);
+        Assert.Equal(skinId, paths.Keys.Single());
+    }
+
+    // ---------- Colour textures ----------
+
+    [Fact]
+    public void TextureReader_ReadsLegacyDxt1Colour()
+    {
+        // 4x4 DXT1, one block: colour 0 pure red, colour 1 pure blue (4-colour mode as c0 > c1);
+        // texel 0 uses index 0, texel 1 index 1, texel 2 index 2 (2/3 red + 1/3 blue)
+        var dds = new byte[128 + 8];
+        BitConverter.GetBytes(0x20534444u).CopyTo(dds, 0);
+        BitConverter.GetBytes(4).CopyTo(dds, 12); BitConverter.GetBytes(4).CopyTo(dds, 16);
+        BitConverter.GetBytes(1).CopyTo(dds, 28);
+        Encoding.ASCII.GetBytes("DXT1").CopyTo(dds, 84);
+        BitConverter.GetBytes((ushort)0xF800).CopyTo(dds, 128); // red
+        BitConverter.GetBytes((ushort)0x001F).CopyTo(dds, 130); // blue
+        BitConverter.GetBytes(0u | 1u << 2 | 2u << 4).CopyTo(dds, 132);
+
+        var tex = TextureReader.ReadColor(f => f == "t.dds" ? dds : null, "t.dds");
+
+        Assert.Equal((4, 4), (tex.Width, tex.Height));
+        Assert.Equal(new byte[] { 255, 0, 0 }, tex.Rgb[..3]);
+        Assert.Equal(new byte[] { 0, 0, 255 }, tex.Rgb[3..6]);
+        Assert.Equal(new byte[] { 170, 0, 85 }, tex.Rgb[6..9]);
+        Assert.Equal((14 * 255 + 170) / 16f / 255f, tex.Mean().X, 0.001f); // the other 13 texels use index 0 (red)
+    }
+
     // ---------- .skinm UVs and submeshes ----------
 
     [Fact]

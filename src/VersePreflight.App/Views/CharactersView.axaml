@@ -57,7 +57,7 @@
 
                 <Grid Grid.Row="2" ColumnDefinitions="*,Auto">
                     <TextBlock Classes="dim" FontSize="12" TextWrapping="Wrap" VerticalAlignment="Center"
-                               Text="Head, skin tone, eyes and hair rebuilt from your own game files. Skin texture and makeup aren't shown yet; hair colour is approximate. Drag to rotate · scroll or pinch to zoom · double-tap to reset." />
+                               Text="Head, skin, eyes and hair rebuilt from your own game files. Makeup and freckles aren't shown yet; hair colour is approximate. Drag to rotate · scroll or pinch to zoom · double-tap to reset." />
                     <Button Grid.Column="1" Classes="hud small" Content="RESET VIEW" Click="OnResetView" Margin="12,0,0,0" />
                 </Grid>
             </Grid>

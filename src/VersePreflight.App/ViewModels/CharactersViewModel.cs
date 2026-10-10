@@ -139,7 +139,17 @@ public sealed partial class CharactersViewModel(PreflightLog log, IUiServices ui
     {
         var head = library.Head.Blend(character);
         var skin = character.SkinColor?.ToVector() ?? CharacterColoring.DefaultSkin;
-        var parts = new List<MeshPart> { new(head, library.Head.Indices, CharacterColoring.Uniform(head.Length, skin), Specular: 0.10f, Gloss: 24f) };
+        // The chosen skin texture adds pores, lips and shading; it's tinted so its average matches the skin tone
+        var skinTexture = accessories?.LoadSkinTexture(character.HeadMaterialId);
+        var parts = new List<MeshPart>
+        {
+            new(head, library.Head.Indices, CharacterColoring.Uniform(head.Length, skin), Specular: 0.10f, Gloss: 24f)
+            {
+                Uvs = library.Head.Uvs,
+                Albedo = skinTexture,
+                AlbedoTint = skinTexture is null ? Vector3.One : CharacterColoring.SkinTint(skinTexture, skin),
+            },
+        };
         if (library.Eyes is { } eyesSet)
         {
             var eyes = eyesSet.Blend(character);
@@ -153,15 +163,15 @@ public sealed partial class CharactersViewModel(PreflightLog log, IUiServices ui
             foreach (var (kind, item) in accessories.LoadFor(character, library.IsFemale))
             {
                 var choice = kind switch { AccessoryKind.Beard => character.Beard, AccessoryKind.Eyebrows => character.Eyebrows, _ => character.Hair };
-                var color = choice?.DisplayColor ?? new Vector3(0.06f, 0.045f, 0.035f);
-                var colors = CharacterColoring.Uniform(item.Mesh.Positions.Length, color);
+                var colors = CharacterColoring.Hair(item.Mesh.Uvs, choice, item.DefaultMelanin);
                 foreach (var layer in item.Layers)
-                    parts.Add(new MeshPart(item.Mesh.Positions, layer.Indices, colors, Specular: 0.18f, Gloss: 18f)
+                    parts.Add(new MeshPart(item.Mesh.Positions, layer.Indices, colors, Specular: 0.07f, Gloss: 18f)
                     {
                         Uvs = item.Mesh.Uvs,
                         Opacity = layer.Opacity,
                         AlphaCutoff = 0.15f, // keep more of each strand so hair reads as full, not wispy
                         TwoSided = true,
+                        Rim = 0.3f,
                     });
             }
         }

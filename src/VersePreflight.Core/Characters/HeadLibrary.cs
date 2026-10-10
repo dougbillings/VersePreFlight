@@ -9,10 +9,14 @@ namespace VersePreflight.Core.Characters;
 /// </summary>
 public sealed class BlendSet
 {
-    internal BlendSet(int[] indices, Vector3[]?[] slots, float[] mask, int regionCount)
+    internal BlendSet(int[] indices, Vector3[]?[] slots, float[] mask, int regionCount, Vector2[]? uvs = null)
     {
         Indices = indices; Slots = slots; Mask = mask; RegionCount = regionCount;
+        Uvs = uvs ?? new Vector2[slots[0]!.Length];
     }
+
+    /// <summary>Texture coordinates of the shared mesh (the same for every preset).</summary>
+    public Vector2[] Uvs { get; }
 
     public int[] Indices { get; }
     /// <summary>Shapes by head_id; slot 0 is the base. Null where the game has no mesh for that preset.</summary>
@@ -65,6 +69,7 @@ public sealed class BlendSet
             foreach (var p in slot) { w.Write(p.X); w.Write(p.Y); w.Write(p.Z); }
         }
         foreach (var m in Mask) w.Write(m);
+        foreach (var uv in Uvs) { w.Write(uv.X); w.Write(uv.Y); }
     }
 
     internal static BlendSet Load(BinaryReader r)
@@ -81,7 +86,8 @@ public sealed class BlendSet
             slots[s] = pos;
         }
         var mask = new float[regions * verts]; for (var i = 0; i < mask.Length; i++) mask[i] = r.ReadSingle();
-        return new BlendSet(indices, slots, mask, regions);
+        var uvs = new Vector2[verts]; for (var i = 0; i < verts; i++) uvs[i] = new Vector2(r.ReadSingle(), r.ReadSingle());
+        return new BlendSet(indices, slots, mask, regions, uvs);
     }
 }
 
@@ -92,7 +98,7 @@ public sealed class BlendSet
 public sealed class HeadLibrary
 {
     private const string CacheMagic = "VPHEAD";
-    private const int CacheVersion = 2;
+    private const int CacheVersion = 3;
     private const string HeadsFolder = @"Data\Objects\Characters\Human\heads\";
 
     internal HeadLibrary(string name, uint bodyHash, BlendSet head, BlendSet? eyes)
@@ -146,7 +152,7 @@ public sealed class HeadLibrary
                 offsets[i] = offset;
                 headSlots[i] = mesh.Positions.Select(p => p - offset).ToArray();
             }
-            var head = new BlendSet(baseHead.Indices, headSlots, dna.Mask, dna.RegionCount);
+            var head = new BlendSet(baseHead.Indices, headSlots, dna.Mask, dna.RegionCount, baseHead.Uvs);
 
             // Eyes: each preset has its own eye mesh. The eye DNA file isn't a region mask, but every eye
             // vertex belongs entirely to the left or right eye region, so build that mask from the head's.
@@ -161,7 +167,7 @@ public sealed class HeadLibrary
                     if (Mesh(dna.HeadSlots[i] + "_eyes.skinm") is not { } m || m.Positions.Length != baseEyes.Positions.Length) continue;
                     eyeSlots[i] = m.Positions.Select(p => p - offset).ToArray(); // move with the preset's head
                 }
-                eyes = new BlendSet(baseEyes.Indices, eyeSlots, EyeMask(baseEyes.Positions, baseHead.Positions, dna), dna.RegionCount);
+                eyes = new BlendSet(baseEyes.Indices, eyeSlots, EyeMask(baseEyes.Positions, baseHead.Positions, dna), dna.RegionCount, baseEyes.Uvs);
             }
             libraries.Add(new HeadLibrary(baseName, dna.BodyHash, head, eyes));
         }

@@ -43,7 +43,9 @@ public class CharacterReaderTests
         Assert.Equal(new CharacterColor(0x2d, 0x32, 0x11), chf.EyeColor);
         Assert.NotNull(chf.Hair);
         Assert.Equal(CharacterFile.Hash("hair_21_m"), chf.Hair.StyleHash);
-        Assert.Equal(new CharacterColor(0x44, 0x62, 0xd0).ToVector(), chf.Hair.DisplayColor); // fully dyed
+        Assert.Equal(new CharacterColor(0x44, 0x62, 0xd0), chf.Hair.DyeColor);
+        Assert.Equal(1f, chf.Hair.DyeAmount);
+        Assert.Equal(0f, chf.Hair.Melanin); // 0 = use the style's default
         Assert.Equal(new Guid("ce9137d2-9c06-412a-ab90-5da4e988902b"), chf.Loadout[CharacterFile.Hash("hair_itemport")]);
         Assert.Null(chf.Beard);
     }

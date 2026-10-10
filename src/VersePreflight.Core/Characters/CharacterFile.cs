@@ -20,19 +20,8 @@ public sealed record HairChoice(uint StyleHash, CharacterColor DyeColor, float D
     /// <summary>Second dye colour (the dye fades from the first to the second along the strands).</summary>
     public CharacterColor DyeColor2 { get; init; }
 
-    /// <summary>
-    /// Approximate visible colour: a dark natural base (with any redness), mixed with the dye colours by
-    /// the dye amount. The game's own hair shader is more complex; this is a viewer approximation.
-    /// </summary>
-    public Vector3 DisplayColor
-    {
-        get
-        {
-            var natural = Vector3.Lerp(new Vector3(0.06f, 0.045f, 0.035f), new Vector3(0.30f, 0.09f, 0.04f), Math.Clamp(Redness, 0, 1));
-            var dye = DyeColor2 == default ? DyeColor.ToVector() : Vector3.Lerp(DyeColor.ToVector(), DyeColor2.ToVector(), 0.5f);
-            return Vector3.Lerp(natural, dye, Math.Clamp(DyeAmount, 0, 1));
-        }
-    }
+    /// <summary>Where along the strand the dye fades from the first colour to the second (0 root .. 1 tip).</summary>
+    public float DyeFadeout { get; init; } = 0.5f;
 }
 
 /// <summary>
@@ -46,6 +35,9 @@ public sealed record CharacterFile(uint BodyHash, IReadOnlyList<DnaBlend[]> Face
     private const ushort Magic = 0x4242; // "BB"
 
     public CharacterColor? SkinColor { get; init; }
+
+    /// <summary>The chosen head skin material (the customizer's skin texture), or empty.</summary>
+    public Guid HeadMaterialId { get; init; }
     public CharacterColor? EyeColor { get; init; }
     public HairChoice? Hair { get; init; }
     public HairChoice? Beard { get; init; }
@@ -119,10 +111,12 @@ public sealed record CharacterFile(uint BodyHash, IReadOnlyList<DnaBlend[]> Face
         p += 4;
 
         var materials = new Dictionary<uint, List<SubMaterial>>();
+        var materialIds = new Dictionary<uint, Guid>();
         while (p + 4 <= d.Length && BitConverter.ToUInt32(d, p) != 0)
         {
-            var (name, subs) = ReadMaterial(d, ref p);
+            var (name, id, subs) = ReadMaterial(d, ref p);
             materials[name] = subs;
+            materialIds[name] = id;
         }
 
         CharacterColor? Color(uint material, uint param) =>
@@ -133,13 +127,14 @@ public sealed record CharacterFile(uint BodyHash, IReadOnlyList<DnaBlend[]> Face
             if (!materials.TryGetValue(material, out var subs) || subs.Count == 0) return null;
             var s = subs[0];
             float F(string n, float fallback) => s.Floats.TryGetValue(Hash(n), out var v) ? v : fallback;
-            return new HairChoice(s.Name, s.Colors.GetValueOrDefault(Ids.HairDyeColor1), F("DyeAmount", 0), F("BaseMelanin", 0.5f), F("BaseMelaninRedness", 0)) { DyeColor2 = s.Colors.GetValueOrDefault(Ids.HairDyeColor2) };
+            return new HairChoice(s.Name, s.Colors.GetValueOrDefault(Ids.HairDyeColor1), F("DyeAmount", 0), F("BaseMelanin", 0.5f), F("BaseMelaninRedness", 0)) { DyeColor2 = s.Colors.GetValueOrDefault(Ids.HairDyeColor2), DyeFadeout = F("DyeFadeout", 0.5f) };
         }
 
         return character with
         {
             Loadout = loadout,
             SkinColor = Color(Ids.HeadMaterial, Ids.BodyColor),
+            HeadMaterialId = materialIds.GetValueOrDefault(Ids.HeadMaterial),
             EyeColor = Color(Ids.EyeMaterial, Ids.EyeColor),
             Hair = Hair(Ids.HairDyeMaterial),
             Beard = Hair(Ids.BeardDyeMaterial),
@@ -160,10 +155,11 @@ public sealed record CharacterFile(uint BodyHash, IReadOnlyList<DnaBlend[]> Face
 
     private sealed record SubMaterial(uint Name, Dictionary<uint, float> Floats, Dictionary<uint, CharacterColor> Colors);
 
-    private static (uint Name, List<SubMaterial> Subs) ReadMaterial(byte[] d, ref int p)
+    private static (uint Name, Guid Id, List<SubMaterial> Subs) ReadMaterial(byte[] d, ref int p)
     {
         // name hash, base material guid, flags, empty guid, sub-material count, marker 5
         var name = BitConverter.ToUInt32(d, p);
+        var id = new Guid(d.AsSpan(p + 4, 16));
         var subCount = BitConverter.ToUInt32(d, p + 4 + 16 + 4 + 16);
         p += 4 + 16 + 4 + 16 + 4 + 4;
         var subs = new List<SubMaterial>();
@@ -182,7 +178,7 @@ public sealed record CharacterFile(uint BodyHash, IReadOnlyList<DnaBlend[]> Face
             // Groups are separated by a 5 marker (absent after the very last sub-material in the file)
             if (p + 4 <= d.Length && BitConverter.ToUInt32(d, p) == 5) p += 4;
         }
-        return (name, subs);
+        return (name, id, subs);
     }
 
     /// <summary>
