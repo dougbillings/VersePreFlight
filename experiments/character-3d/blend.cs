@@ -12,10 +12,11 @@ var dna = File.ReadAllBytes(Path.Combine(headDir, "protos_human_male_face_t1_pu_
 const int Verts = 5584, Regions = 13, MaskStart = 0x14F5B78;
 
 // --- Inputs ---
-var names = Enumerable.Range(0, 60).Select(i => Encoding.ASCII.GetString(dna, 0x2D0 + i * 40, 40).TrimEnd('\0')).ToList();
+// Head ids index 61 slots starting at 0x2A8; slot 0 is the base (protos) head itself
+var names = Enumerable.Range(0, 61).Select(i => Encoding.ASCII.GetString(dna, 0x2A8 + i * 40, 40).Split('\0')[0]).ToList();
 var (basePos, indices) = ReadGlb(Path.Combine(work, "male_head.glb"));
-var heads = names.Select(n => { var p = Path.Combine(work, "heads", n + "_head.glb"); return File.Exists(p) ? ReadGlb(p).Positions : null; }).ToList();
-Console.WriteLine($"Loaded base + {heads.Count(h => h is not null)}/60 preset heads");
+var heads = names.Select(n => { if (n.StartsWith("protos")) return basePos; var p = Path.Combine(work, "heads", n + "_head.glb"); return File.Exists(p) ? ReadGlb(p).Positions : null; }).ToList();
+Console.WriteLine($"Loaded {heads.Count(h => h is not null)}/61 head slots (slot 0 = base)");
 
 // Some presets are stored with a global offset; remove each head's mean offset from the base
 var alignHeads = !args.Contains("--no-align");
@@ -138,9 +139,51 @@ using (var canvas = new SKCanvas(sheet))
         canvas.DrawText(panels[k].Label, k * Size + 12, 24, font, paint);
     }
 }
+WriteGlb(Path.Combine(work, $"{chfName}_head.glb"), blended, indices);
+Console.WriteLine($"Wrote {chfName}_head.glb");
+
 var outPath = Path.Combine(work, $"render_{chfName}.png");
 using (var fs = File.Create(outPath)) sheet.Encode(fs, SKEncodedImageFormat.Png, 100);
 Console.WriteLine($"Wrote {outPath}");
+
+// Minimal glTF 2.0 binary: positions (converted from Z-up to glTF's Y-up, centred), smooth normals, indices, grey material
+static void WriteGlb(string path, Vector3[] pos, int[] idx)
+{
+    var center = pos.Aggregate(Vector3.Zero, (a, b) => a + b) / pos.Length;
+    var p = pos.Select(v => { var c = v - center; return new Vector3(c.X, c.Z, -c.Y); }).ToArray();
+    var n = new Vector3[p.Length];
+    for (var t = 0; t + 2 < idx.Length; t += 3)
+    {
+        var fn = Vector3.Cross(p[idx[t + 1]] - p[idx[t]], p[idx[t + 2]] - p[idx[t]]);
+        n[idx[t]] += fn; n[idx[t + 1]] += fn; n[idx[t + 2]] += fn;
+    }
+    for (var i = 0; i < n.Length; i++) n[i] = n[i] == Vector3.Zero ? Vector3.UnitY : Vector3.Normalize(n[i]);
+
+    using var bin = new MemoryStream(); using var bw = new BinaryWriter(bin);
+    foreach (var v in p) { bw.Write(v.X); bw.Write(v.Y); bw.Write(v.Z); }
+    foreach (var v in n) { bw.Write(v.X); bw.Write(v.Y); bw.Write(v.Z); }
+    foreach (var i in idx) bw.Write((uint)i);
+    var min = new Vector3(p.Min(v => v.X), p.Min(v => v.Y), p.Min(v => v.Z));
+    var max = new Vector3(p.Max(v => v.X), p.Max(v => v.Y), p.Max(v => v.Z));
+    int vb = p.Length * 12, ib = idx.Length * 4;
+    var json = $$$"""
+    {"asset":{"version":"2.0","generator":"Verse Preflight experiment"},"scene":0,"scenes":[{"nodes":[0]}],"nodes":[{"mesh":0}],
+     "meshes":[{"primitives":[{"attributes":{"POSITION":0,"NORMAL":1},"indices":2,"material":0}]}],
+     "materials":[{"pbrMetallicRoughness":{"baseColorFactor":[0.82,0.78,0.74,1],"metallicFactor":0,"roughnessFactor":0.7}}],
+     "buffers":[{"byteLength":{{{bin.Length}}}}],
+     "bufferViews":[{"buffer":0,"byteOffset":0,"byteLength":{{{vb}}},"target":34962},{"buffer":0,"byteOffset":{{{vb}}},"byteLength":{{{vb}}},"target":34962},{"buffer":0,"byteOffset":{{{2 * vb}}},"byteLength":{{{ib}}},"target":34963}],
+     "accessors":[{"bufferView":0,"componentType":5126,"count":{{{p.Length}}},"type":"VEC3","min":[{{{F(min.X)}}},{{{F(min.Y)}}},{{{F(min.Z)}}}],"max":[{{{F(max.X)}}},{{{F(max.Y)}}},{{{F(max.Z)}}}]},
+                  {"bufferView":1,"componentType":5126,"count":{{{p.Length}}},"type":"VEC3"},
+                  {"bufferView":2,"componentType":5125,"count":{{{idx.Length}}},"type":"SCALAR"}]}
+    """;
+    static string F(float f) => f.ToString("R", System.Globalization.CultureInfo.InvariantCulture);
+    var jsonBytes = Encoding.UTF8.GetBytes(json);
+    var jsonPad = (4 - jsonBytes.Length % 4) % 4; var binPad = (int)((4 - bin.Length % 4) % 4);
+    using var fs = File.Create(path); using var w = new BinaryWriter(fs);
+    w.Write(0x46546C67u); w.Write(2u); w.Write((uint)(12 + 8 + jsonBytes.Length + jsonPad + 8 + bin.Length + binPad));
+    w.Write((uint)(jsonBytes.Length + jsonPad)); w.Write(0x4E4F534Au); w.Write(jsonBytes); for (var i = 0; i < jsonPad; i++) w.Write((byte)' ');
+    w.Write((uint)(bin.Length + binPad)); w.Write(0x004E4942u); w.Write(bin.ToArray()); for (var i = 0; i < binPad; i++) w.Write((byte)0);
+}
 
 static Vector3 Centroid(Vector3[] pos, Func<int, bool> include)
 {
