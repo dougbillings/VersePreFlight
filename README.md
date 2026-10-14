@@ -23,6 +23,19 @@ game ready after every patch:
 Verse Preflight never modifies the game's executables or `Data.p4k` (the character viewer only
 reads it), never interacts with the running game, and collects no data.
 
+## Download
+
+Verse Preflight runs on Windows 10 (version 2004) or later and needs Star Citizen installed.
+
+- **GitHub:** [Releases](https://github.com/dougbillings/VersePreFlight/releases/latest)
+  - **VersePreflight-win-Setup.exe** installs for your Windows user (no admin needed) and updates itself.
+  - **VersePreflight-win-Portable.zip** runs from any folder, for example one synced between PCs.
+- **Microsoft Store:** coming soon. Microsoft signs and updates the Store version.
+
+The GitHub downloads are code-signed using free code signing provided by
+[SignPath.io](https://about.signpath.io), with a certificate by [SignPath Foundation](https://signpath.org).
+See the [code signing policy](#code-signing-policy). Releases made before signing was set up are unsigned.
+
 ## Status
 
 Early development. Planned milestones:
