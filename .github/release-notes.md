@@ -7,13 +7,13 @@
 
 Windows may show a SmartScreen warning for new releases until the app is code-signed.
 
-### New in 0.1.0-alpha.4
+### New in 0.1.0-alpha.5
 
-- **Fixed:** OPEN FOLDER on the Characters tab now opens the characters folder (#2).
-- **Safer with downloaded characters:** a damaged or malformed `.chf` file now shows a clear error
-  instead of freezing or closing the app.
-- **Safer settings:** a folder link in the config that points outside its game folder is refused before
-  any file is touched.
-- **StarStrings:** unusually large downloads are refused instead of being installed.
+- **Getting ready for the Microsoft Store.** This build is also packaged for the Store, where Microsoft
+  signs it and delivers updates. Nothing changes for this download: it works and updates exactly as before.
+- If you later switch to the Store version, it picks up your settings from this one on its first start,
+  so there's nothing to set up again.
+- Added a [privacy policy](https://github.com/dougbillings/VersePreFlight/blob/main/PRIVACY.md): Verse
+  Preflight collects no data, and only contacts GitHub for update checks and (if enabled) StarStrings.
 
 See the commits since the previous release for everything that changed.
