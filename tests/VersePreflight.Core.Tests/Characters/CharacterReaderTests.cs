@@ -62,7 +62,8 @@ public class CharacterReaderTests
     public void Hash_IsCrc32COfName() =>
         Assert.Equal(CharacterFile.Crc32C(Encoding.UTF8.GetBytes("EyeMaterial")), CharacterFile.Hash("EyeMaterial"));
 
-    private static byte[] BuildChf(uint bodyHash, (int Head, ushort Value)[][] parts, bool corruptCrc = false, bool appearance = false)
+    private static byte[] BuildChf(uint bodyHash, (int Head, ushort Value)[][] parts, bool corruptCrc = false, bool appearance = false,
+        Action<BinaryWriter>? writeAppearance = null, int padding = 0)
     {
         var dna = new MemoryStream(); var w = new BinaryWriter(dna);
         w.Write(0xFCD09394u); w.Write(bodyHash); w.Write(0x12345678u); w.Write(0u);
@@ -77,8 +78,10 @@ public class CharacterReaderTests
         var payload = new MemoryStream(); var pw = new BinaryWriter(payload);
         pw.Write(2u); pw.Write(8u); pw.Write(new byte[16]); pw.Write(new byte[16]);
         pw.Write((ulong)dna.Length); pw.Write(dna.ToArray());
-        if (appearance) WriteAppearance(pw);
+        if (writeAppearance is not null) writeAppearance(pw);
+        else if (appearance) WriteAppearance(pw);
         else pw.Write(new byte[32]); // no loadout/materials: only the face is read
+        pw.Write(new byte[padding]);
 
         var compressed = new Compressor().Wrap(payload.ToArray()).ToArray();
         var file = new byte[CharacterFile.FileSize];
@@ -110,6 +113,49 @@ public class CharacterReaderTests
     {
         Assert.Throws<InvalidDataException>(() => CharacterFile.Parse(BuildChf(1, [[(0, 1)]], corruptCrc: true)));
         Assert.Throws<InvalidDataException>(() => CharacterFile.Parse(new byte[100]));
+    }
+
+    // Character files are shared online: bad ones must fail cleanly, never exhaust memory or the stack
+
+    [Fact]
+    public void CharacterFile_RejectsPayloadOverSizeLimit() =>
+        Assert.Throws<InvalidDataException>(() =>
+            CharacterFile.Parse(BuildChf(1, [[(0, 65535)]], padding: CharacterFile.MaxPayloadSize)));
+
+    [Fact]
+    public void CharacterFile_StopsAtLoadoutDepthLimit()
+    {
+        void DeepLoadout(BinaryWriter w)
+        {
+            var depth = CharacterFile.MaxLoadoutDepth + 2;
+            w.Write((ulong)depth);
+            for (var i = 0; i < depth; i++) { w.Write((uint)i); w.Write(Guid.NewGuid().ToByteArray()); w.Write(i < depth - 1 ? 1u : 0u); w.Write(0u); }
+            w.Write(5u);
+            w.Write(0u); // no materials
+        }
+
+        var chf = CharacterFile.Parse(BuildChf(1, [[(3, 65535)]], writeAppearance: DeepLoadout));
+
+        Assert.Empty(chf.Loadout);                     // the appearance block was rejected...
+        Assert.Equal(3, chf.FaceParts[0][0].HeadId);   // ...but the face is still read
+    }
+
+    [Fact]
+    public void CharacterFile_RejectsCountsLargerThanTheFile()
+    {
+        void ImpossibleCount(BinaryWriter w)
+        {
+            w.Write(1UL);
+            w.Write(1u); w.Write(Guid.NewGuid().ToByteArray()); w.Write(0u); w.Write(0u);
+            w.Write(5u);
+            w.Write(0xA98BEB34u); w.Write(new byte[16]); w.Write(0u); w.Write(new byte[16]); w.Write(1u); w.Write(5u);
+            w.Write(1u); w.Write(uint.MaxValue); // a texture count that can't fit
+        }
+
+        var chf = CharacterFile.Parse(BuildChf(1, [[(3, 65535)]], writeAppearance: ImpossibleCount));
+
+        Assert.Null(chf.SkinColor);
+        Assert.Equal(3, chf.FaceParts[0][0].HeadId);
     }
 
     [Fact]

@@ -82,11 +82,22 @@ public sealed partial class StarStringsClient(HttpClient http)
         return match.Success ? match.Groups[1].Value : null;
     }
 
+    // Far above today's sizes (a ~2.4 MB zip holding a ~10 MB global.ini), but they keep a broken
+    // or tampered release from filling memory
+    internal const long MaxDownloadSize = 50L * 1024 * 1024;
+    internal const long MaxGlobalIniSize = 100L * 1024 * 1024;
+
     /// <summary>Downloads the release zip and returns the bytes of Localization/english/global.ini.</summary>
     public async Task<byte[]> DownloadGlobalIniAsync(StarStringsRelease release, CancellationToken ct = default)
     {
-        var zipBytes = await http.GetByteArrayAsync(release.AssetUrl, ct).ConfigureAwait(false);
-        return ExtractGlobalIni(zipBytes);
+        if (release.AssetSize > MaxDownloadSize) throw TooLarge("download");
+        using var response = await http.GetAsync(release.AssetUrl, HttpCompletionOption.ResponseHeadersRead, ct).ConfigureAwait(false);
+        response.EnsureSuccessStatusCode();
+        if (response.Content.Headers.ContentLength > MaxDownloadSize) throw TooLarge("download");
+
+        // Throws if the body turns out larger than the limit, whatever the headers said
+        await response.Content.LoadIntoBufferAsync(MaxDownloadSize, ct).ConfigureAwait(false);
+        return ExtractGlobalIni(await response.Content.ReadAsByteArrayAsync(ct).ConfigureAwait(false));
     }
 
     internal static byte[] ExtractGlobalIni(byte[] zipBytes)
@@ -95,12 +106,23 @@ public sealed partial class StarStringsClient(HttpClient http)
         var entry = zip.Entries.FirstOrDefault(e =>
                         e.FullName.Replace('\\', '/').EndsWith("Localization/english/global.ini", StringComparison.OrdinalIgnoreCase))
                     ?? throw new InvalidDataException("The download does not contain Localization/english/global.ini.");
+        if (entry.Length > MaxGlobalIniSize) throw TooLarge("global.ini");
 
+        // The declared size is checked above; the read is limited too, in case the entry unpacks to more
         using var stream = entry.Open();
         using var buffer = new MemoryStream();
-        stream.CopyTo(buffer);
+        var chunk = new byte[81920];
+        int read;
+        while ((read = stream.Read(chunk)) > 0)
+        {
+            if (buffer.Length + read > MaxGlobalIniSize) throw TooLarge("global.ini");
+            buffer.Write(chunk, 0, read);
+        }
         return buffer.ToArray();
     }
+
+    private static InvalidDataException TooLarge(string what) =>
+        new($"The StarStrings {what} is unexpectedly large (over {(what == "download" ? MaxDownloadSize : MaxGlobalIniSize) / 1048576} MB), so it was not installed.");
 
     [GeneratedRegex(@"commit ([0-9a-f]{7,40})")]
     private static partial Regex CommitInBody();

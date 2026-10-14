@@ -7,12 +7,13 @@
 
 Windows may show a SmartScreen warning for new releases until the app is code-signed.
 
-### New in 0.1.0-alpha.3
+### New in 0.1.0-alpha.4
 
-- **Characters tab (experimental):** a 3D view of your saved custom characters, rebuilt from your own
-  game install: face shape, skin texture and tone, eyes, hair and beard, under lighting matched to the
-  in-game character booth. Drag to rotate, scroll or pinch to zoom.
-  - The first time after each patch it reads head data from the game files, which can take a moment.
-  - Not shown yet: makeup, freckles and tattoos. Lips can look fuller than in game, and hair colour is approximate.
+- **Fixed:** OPEN FOLDER on the Characters tab now opens the characters folder (#2).
+- **Safer with downloaded characters:** a damaged or malformed `.chf` file now shows a clear error
+  instead of freezing or closing the app.
+- **Safer settings:** a folder link in the config that points outside its game folder is refused before
+  any file is touched.
+- **StarStrings:** unusually large downloads are refused instead of being installed.
 
 See the commits since the previous release for everything that changed.

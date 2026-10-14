@@ -117,6 +117,39 @@ public class FolderLinkerTests
         Assert.Equal("a", File.ReadAllText(dir.Combine("sync", "Mappings", "a.xml")));
     }
 
+    [Theory]
+    [InlineData("", "Mappings")]
+    [InlineData("..", "Mappings")]
+    [InlineData("user/../..", "Mappings")]
+    [InlineData("/etc", "Mappings")]
+    [InlineData("C:\\Windows", "Mappings")]
+    [InlineData("user/client/0/Controls/Mappings", "")]
+    [InlineData("user/client/0/Controls/Mappings", "..")]
+    [InlineData("user/client/0/Controls/Mappings", "a/b")]
+    [InlineData("user/client/0/Controls/Mappings", FolderLinker.BackupFolderName)]
+    public void LinkDefinition_RejectsPathsOutsideTheirFolder(string source, string target) =>
+        Assert.NotNull(new LinkDefinition { Name = "Bad", SourceSubPath = source, TargetName = target }.GetProblem());
+
+    [Fact]
+    public void LinkDefinition_DefaultsAreValid() =>
+        Assert.All(LinkDefinition.Defaults(), d => Assert.Null(d.GetProblem()));
+
+    [Fact]
+    public void Apply_RefusesUnsafeDefinitionWithoutTouchingFiles()
+    {
+        using var dir = new TempDir();
+        var env = dir.CreateEnvironment();
+        var gameFile = dir.WriteFile("game/LIVE/Data.p4k", "game data");
+        var channel = new LinkDefinition { Name = "Whole channel", SourceSubPath = "..", TargetName = "Mappings" };
+
+        Assert.Throws<IOException>(() => _linker.Plan(env, channel, dir.Combine("sync")));
+        Assert.Throws<IOException>(() => _linker.Apply(env, channel, dir.Combine("sync")));
+        Assert.Throws<IOException>(() => _linker.Unlink(env, channel));
+
+        Assert.Equal("game data", File.ReadAllText(gameFile));
+        Assert.False(Directory.Exists(dir.Combine("sync")));
+    }
+
     [Fact]
     public void Unlink_RestoresRealFolderWithCopiesAndKeepsSyncedFiles()
     {

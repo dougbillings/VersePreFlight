@@ -34,6 +34,11 @@ public sealed record CharacterFile(uint BodyHash, IReadOnlyList<DnaBlend[]> Face
     public const int FileSize = 4096;
     private const ushort Magic = 0x4242; // "BB"
 
+    // Character files are shared online, so every size and count is checked before it's trusted.
+    // Real payloads unpack to about 2 KB and the loadout is a few levels deep.
+    internal const int MaxPayloadSize = 64 * 1024;
+    internal const int MaxLoadoutDepth = 16;
+
     public CharacterColor? SkinColor { get; init; }
 
     /// <summary>The chosen head skin material (the customizer's skin texture), or empty.</summary>
@@ -57,7 +62,17 @@ public sealed record CharacterFile(uint BodyHash, IReadOnlyList<DnaBlend[]> Face
         var expectedCrc = BitConverter.ToUInt32(file, 4);
         if (Crc32C(file.AsSpan(16)) != expectedCrc) throw new InvalidDataException("Character file is damaged (checksum mismatch).");
         var compressed = BitConverter.ToInt32(file, 8);
-        var payload = new Decompressor().Unwrap(file.AsSpan(16, compressed)).ToArray();
+        if (compressed is <= 0 or > FileSize - 16) throw new InvalidDataException("Character file is damaged (bad size).");
+        byte[] payload;
+        try
+        {
+            using var decompressor = new Decompressor();
+            payload = decompressor.Unwrap(file.AsSpan(16, compressed), MaxPayloadSize).ToArray();
+        }
+        catch (ZstdException e)
+        {
+            throw new InvalidDataException($"Character file is damaged ({e.Message}).", e);
+        }
         return ParsePayload(payload);
     }
 
@@ -65,7 +80,7 @@ public sealed record CharacterFile(uint BodyHash, IReadOnlyList<DnaBlend[]> Face
     {
         // version(4) version(4) body type guid(16) voice guid(16), then u64 DNA size and the DNA block
         var p = 4 + 4 + 16 + 16;
-        var dnaSize = (int)BitConverter.ToUInt64(d, p);
+        var dnaSize = CheckedCount(BitConverter.ToUInt64(d, p), 1, d, p + 8);
         p += 8;
         var (bodyHash, parts) = ParseDna(d.AsSpan(p, dnaSize));
         p += dnaSize;
@@ -106,7 +121,7 @@ public sealed record CharacterFile(uint BodyHash, IReadOnlyList<DnaBlend[]> Face
         // Loadout: u64 total port count, then a tree of (name hash, item guid, child count, tail count, children...)
         p += 8;
         var loadout = new Dictionary<uint, Guid>();
-        ReadItemPort(d, ref p, loadout);
+        ReadItemPort(d, ref p, loadout, depth: 0);
         if (BitConverter.ToUInt32(d, p) != 5) throw new InvalidDataException("Unexpected material marker.");
         p += 4;
 
@@ -142,15 +157,17 @@ public sealed record CharacterFile(uint BodyHash, IReadOnlyList<DnaBlend[]> Face
         };
     }
 
-    private static void ReadItemPort(byte[] d, ref int p, Dictionary<uint, Guid> loadout)
+    private static void ReadItemPort(byte[] d, ref int p, Dictionary<uint, Guid> loadout, int depth)
     {
+        // A recursion limit: too deep a tree would overflow the stack, which can't be caught
+        if (depth > MaxLoadoutDepth) throw new InvalidDataException("Unexpected loadout layout.");
         var name = BitConverter.ToUInt32(d, p);
         var id = new Guid(d.AsSpan(p + 4, 16));
         var children = BitConverter.ToUInt32(d, p + 20);
         p += 28; // name, guid, child count, tail count
         if (id != Guid.Empty) loadout[name] = id;
         if (children > 64) throw new InvalidDataException("Unexpected loadout layout.");
-        for (var i = 0; i < children; i++) ReadItemPort(d, ref p, loadout);
+        for (var i = 0; i < children; i++) ReadItemPort(d, ref p, loadout, depth + 1);
     }
 
     private sealed record SubMaterial(uint Name, Dictionary<uint, float> Floats, Dictionary<uint, CharacterColor> Colors);
@@ -162,23 +179,35 @@ public sealed record CharacterFile(uint BodyHash, IReadOnlyList<DnaBlend[]> Face
         var id = new Guid(d.AsSpan(p + 4, 16));
         var subCount = BitConverter.ToUInt32(d, p + 4 + 16 + 4 + 16);
         p += 4 + 16 + 4 + 16 + 4 + 4;
+        subCount = (uint)CheckedCount(subCount, 24, d, p); // each sub-material is at least 24 bytes
         var subs = new List<SubMaterial>();
         for (var i = 0; i < subCount; i++)
         {
             var subName = BitConverter.ToUInt32(d, p);
-            var textures = BitConverter.ToUInt32(d, p + 4);
-            p += 8 + (int)textures * 21; // texture: zero(4) index(1) guid(16)
+            var textures = CheckedCount(BitConverter.ToUInt32(d, p + 4), 21, d, p + 8);
+            p += 8 + textures * 21; // texture: zero(4) index(1) guid(16)
             var floats = new Dictionary<uint, float>();
-            var floatCount = (int)BitConverter.ToUInt64(d, p); p += 8;
+            var floatCount = CheckedCount(BitConverter.ToUInt64(d, p), 12, d, p + 8); p += 8;
             for (var f = 0; f < floatCount; f++, p += 12) floats[BitConverter.ToUInt32(d, p)] = BitConverter.ToSingle(d, p + 4);
             var colors = new Dictionary<uint, CharacterColor>();
-            var colorCount = (int)BitConverter.ToUInt64(d, p); p += 8;
+            var colorCount = CheckedCount(BitConverter.ToUInt64(d, p), 12, d, p + 8); p += 8;
             for (var c = 0; c < colorCount; c++, p += 12) colors[BitConverter.ToUInt32(d, p)] = new CharacterColor(d[p + 4], d[p + 5], d[p + 6]);
             subs.Add(new SubMaterial(subName, floats, colors));
             // Groups are separated by a 5 marker (absent after the very last sub-material in the file)
             if (p + 4 <= d.Length && BitConverter.ToUInt32(d, p) == 5) p += 4;
         }
         return (name, id, subs);
+    }
+
+    /// <summary>
+    /// A count read from the file, as an int, if that many items of <paramref name="itemSize"/> bytes
+    /// fit in what's left after <paramref name="p"/>. Stops wrap-around and endless loops on bad data.
+    /// </summary>
+    private static int CheckedCount(ulong count, int itemSize, byte[] d, int p)
+    {
+        var remaining = (ulong)Math.Max(0, d.Length - p);
+        if (count > remaining / (ulong)itemSize) throw new InvalidDataException("Unexpected character file layout.");
+        return (int)count;
     }
 
     /// <summary>

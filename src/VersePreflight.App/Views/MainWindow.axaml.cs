@@ -44,7 +44,12 @@ public partial class MainWindow : Window, IUiServices
 
     public async Task OpenUrlAsync(string url) => await Launcher.LaunchUriAsync(new Uri(url));
 
-    public async Task OpenPathAsync(string path) => await Launcher.LaunchFileInfoAsync(new FileInfo(path));
+    public async Task OpenPathAsync(string path)
+    {
+        // LaunchFileInfoAsync silently does nothing for a folder (FileInfo.Exists is false), so folders need their own call
+        if (Directory.Exists(path)) await Launcher.LaunchDirectoryInfoAsync(new DirectoryInfo(path));
+        else await Launcher.LaunchFileInfoAsync(new FileInfo(path));
+    }
 
     public async Task CopyTextAsync(string text)
     {

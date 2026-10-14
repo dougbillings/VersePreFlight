@@ -48,6 +48,7 @@ public sealed class FolderLinker(PreflightLog log, string machineName, TimeProvi
 
     public LinkPlan Plan(GameEnvironment environment, LinkDefinition definition, string linkRoot)
     {
+        ThrowIfUnsafe(definition);
         var source = PathUtil.ResolveCaseInsensitive(environment.Path, definition.SourceSubPath);
         var target = PathUtil.ResolveCaseInsensitive(linkRoot, definition.TargetName);
 
@@ -157,6 +158,7 @@ public sealed class FolderLinker(PreflightLog log, string machineName, TimeProvi
     /// </summary>
     public LinkResult Unlink(GameEnvironment environment, LinkDefinition definition)
     {
+        ThrowIfUnsafe(definition);
         var source = PathUtil.ResolveCaseInsensitive(environment.Path, definition.SourceSubPath);
         var label = $"{environment.Name} - {definition.Name}";
         var target = DirectoryLinks.GetTarget(source);
@@ -189,6 +191,13 @@ public sealed class FolderLinker(PreflightLog log, string machineName, TimeProvi
             log.Error($"{label}: {e.Message}");
             return new LinkResult(false, e.Message);
         }
+    }
+
+    /// <summary>Checked before anything on disk is touched, so a bad definition in the config can't empty the wrong folder.</summary>
+    private static void ThrowIfUnsafe(LinkDefinition definition)
+    {
+        if (definition.GetProblem() is { } problem)
+            throw new IOException($"Link '{definition.Name}' is not valid: {problem} Check the links in the config file.");
     }
 
     private string CreateBackupRoot(string linkRoot, GameEnvironment environment, LinkDefinition definition)

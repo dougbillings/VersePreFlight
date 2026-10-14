@@ -108,6 +108,30 @@ public class StarStringsTests
     }
 
     [Fact]
+    public async Task Download_RefusesReleaseOverSizeLimit()
+    {
+        var handler = new FakeHttpHandler().Respond(AssetUrl, MakeZip("strings"));
+        var release = new StarStringsRelease("big", DateTimeOffset.UnixEpoch, null, new Uri(AssetUrl), StarStringsClient.MaxDownloadSize + 1);
+
+        await Assert.ThrowsAsync<InvalidDataException>(() => ClientFor(handler).DownloadGlobalIniAsync(release));
+        Assert.Empty(handler.Requests); // refused before downloading anything
+    }
+
+    [Fact]
+    public void ExtractGlobalIni_RefusesFileOverSizeLimit()
+    {
+        using var buffer = new MemoryStream();
+        using (var zip = new ZipArchive(buffer, ZipArchiveMode.Create, leaveOpen: true))
+        using (var entry = zip.CreateEntry("Data/Localization/english/global.ini").Open())
+        {
+            var block = new byte[1024 * 1024];
+            for (var i = 0; i <= StarStringsClient.MaxGlobalIniSize / block.Length; i++) entry.Write(block);
+        }
+
+        Assert.Throws<InvalidDataException>(() => StarStringsClient.ExtractGlobalIni(buffer.ToArray()));
+    }
+
+    [Fact]
     public void ExtractGlobalIni_ReturnsFileContent() =>
         Assert.Equal("abc", Encoding.UTF8.GetString(StarStringsClient.ExtractGlobalIni(MakeZip("abc"))));
 }
