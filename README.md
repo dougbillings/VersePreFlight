@@ -62,6 +62,7 @@ dotnet vpk pack -u VersePreflight -v 0.1.0 -p publish -e VersePreflight.exe -i s
 
 The app checks this repository's GitHub Releases for new versions at startup (it can be turned off in
 Settings). No other network requests are made, apart from StarStrings downloads when enabled.
+See the [privacy policy](PRIVACY.md).
 
 ## Credits
 
