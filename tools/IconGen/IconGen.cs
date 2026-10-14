@@ -33,6 +33,16 @@ foreach (var size in (int[])[16, 24, 32, 48, 256])
 }
 Console.WriteLine($"Wrote Store logos in {msixDir}");
 
+// Optional: "--store-art <folder>" writes the Microsoft Store listing images (not committed; regenerate
+// when needed): the 300x300 app tile icon and the 16:9 "super hero" art, which must have no text or UI.
+if (args is ["--store-art", var storeArtDir])
+{
+    Directory.CreateDirectory(storeArtDir);
+    File.WriteAllBytes(Path.Combine(storeArtDir, "app-tile-icon-300x300.png"), Render(300));
+    File.WriteAllBytes(Path.Combine(storeArtDir, "super-hero-art-3840x2160.png"), RenderHero(3840, 2160));
+    Console.WriteLine($"Wrote Store listing art in {Path.GetFullPath(storeArtDir)}");
+}
+
 // Optional: "--preview <file.png>" writes the small sizes enlarged (pixelated) on dark and light
 // backgrounds, to judge how the icon reads in a taskbar or title bar.
 if (args is ["--preview", var previewPath])
@@ -123,6 +133,94 @@ static byte[] Render(int size)
         using var dot = new SKPaint { IsAntialias = true, Color = accent };
         canvas.DrawRect(121, 160, 14, 14, dot);
     }
+
+    using var image = surface.Snapshot();
+    using var data = image.Encode(SKEncodedImageFormat.Png, 100);
+    return data.ToArray();
+}
+
+// Store "super hero" art: deep space, a seeded starfield and the launch mark glowing among radar-like
+// diamond rings. Drawn entirely from code (no game assets). Microsoft asks for no text and no UI, and
+// for key visuals to stay out of the bottom third, where the Store may overlay a gradient.
+static byte[] RenderHero(int width, int height)
+{
+    using var surface = SKSurface.Create(new SKImageInfo(width, height, SKColorType.Rgba8888, SKAlphaType.Premul));
+    var canvas = surface.Canvas;
+    var unit = height / 2160f;
+    var cx = width / 2f;
+    var cy = height * 0.4f; // upper two-thirds
+
+    using (var sky = new SKPaint())
+    {
+        sky.Shader = SKShader.CreateLinearGradient(new SKPoint(0, 0), new SKPoint(0, height),
+            [SKColor.Parse("#0C1C2E"), SKColor.Parse("#03060B")], SKShaderTileMode.Clamp);
+        canvas.DrawRect(0, 0, width, height, sky);
+    }
+    using (var nebula = new SKPaint())
+    {
+        nebula.Shader = SKShader.CreateRadialGradient(new SKPoint(cx, cy), 1500 * unit,
+            [SKColor.Parse("#3FD8F2").WithAlpha(46), SKColor.Parse("#1D6F82").WithAlpha(20), SKColors.Transparent],
+            [0f, 0.45f, 1f], SKShaderTileMode.Clamp);
+        canvas.DrawRect(0, 0, width, height, nebula);
+    }
+
+    // Stars: fixed seed so every run produces the same image
+    var random = new Random(4101);
+    using (var star = new SKPaint { IsAntialias = true })
+    {
+        for (var i = 0; i < 1600; i++)
+        {
+            var radius = (float)Math.Pow(random.NextDouble(), 4) * 4.5f * unit + 0.8f * unit;
+            var tint = random.NextDouble() < 0.2 ? SKColor.Parse("#BFF4FF") : SKColor.Parse("#F2F6FF");
+            star.Color = tint.WithAlpha((byte)random.Next(60, 230));
+            canvas.DrawCircle((float)random.NextDouble() * width, (float)random.NextDouble() * height, radius, star);
+        }
+    }
+
+    // Radar-like diamond rings, fading outwards
+    for (var ring = 1; ring <= 7; ring++)
+    {
+        using var path = Diamond(cx, cy, (360 + ring * 190) * unit);
+        using var paint = Stroke(SKColor.Parse("#3FD8F2").WithAlpha((byte)(70 - ring * 8)), 3 * unit);
+        canvas.DrawPath(path, paint);
+    }
+
+    // The mark (same geometry as the app icon, scaled up), with a soft glow behind it
+    var scale = 4.2f * unit;
+    SKPoint P(float x, float y) => new(cx + (x - 128) * scale, cy + (y - 128) * scale);
+    void DrawMark(SKMaskFilter? glow)
+    {
+        using (var outer = Diamond(cx, cy, 100 * scale))
+        using (var p = Stroke(SKColor.Parse("#1D6F82"), 8 * scale))
+        {
+            p.MaskFilter = glow;
+            canvas.DrawPath(outer, p);
+        }
+        using (var inner = Diamond(cx, cy, 74 * scale))
+        using (var p = Stroke(SKColor.Parse("#3FD8F2"), 10 * scale))
+        {
+            p.MaskFilter = glow;
+            canvas.DrawPath(inner, p);
+        }
+        using (var chevron = new SKPath())
+        using (var p = Stroke(SKColor.Parse("#8BEBFA"), 15 * scale))
+        {
+            p.MaskFilter = glow;
+            p.StrokeCap = SKStrokeCap.Butt;
+            chevron.MoveTo(P(90, 146));
+            chevron.LineTo(P(128, 108));
+            chevron.LineTo(P(166, 146));
+            canvas.DrawPath(chevron, p);
+        }
+        using (var dot = new SKPaint { IsAntialias = true, Color = SKColor.Parse("#3FD8F2"), MaskFilter = glow })
+        {
+            var corner = P(121, 160);
+            canvas.DrawRect(corner.X, corner.Y, 14 * scale, 14 * scale, dot);
+        }
+    }
+    using (var glow = SKMaskFilter.CreateBlur(SKBlurStyle.Normal, 38 * unit))
+        DrawMark(glow);
+    DrawMark(null);
 
     using var image = surface.Snapshot();
     using var data = image.Encode(SKEncodedImageFormat.Png, 100);
