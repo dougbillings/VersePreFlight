@@ -15,6 +15,12 @@ public interface IPlatform
     /// <summary>Per-user, per-machine data folder for local backups. Never synced.</summary>
     string DataDirectory { get; }
 
+    /// <summary>
+    /// For the Microsoft Store version: the regular install's settings folder, to import from once.
+    /// Null for every other kind of install.
+    /// </summary>
+    string? PreviousConfigDirectory { get; }
+
     /// <summary>Likely game base folders (the folder containing LIVE, PTU, ...) that exist on this machine.</summary>
     IReadOnlyList<string> FindGameBaseCandidates();
 

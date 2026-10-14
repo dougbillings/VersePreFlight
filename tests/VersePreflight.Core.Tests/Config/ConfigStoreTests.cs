@@ -55,6 +55,64 @@ public class ConfigStoreTests
         Assert.Null(store.ResolveLinkRoot(new PreflightConfig()));
     }
 
+    // ---------- one-time import for the Store version ----------
+
+    [Fact]
+    public void Import_CopiesThisMachinesSettingsAndKeepsLinkFolderPointingAtTheSamePlace()
+    {
+        using var dir = new TempDir();
+        var previous = dir.Combine("roaming", "VersePreflight");
+        new ConfigStore(previous, "PC1").Save(new PreflightConfig { GameBase = "G", LinkRoot = "..", StarStringsEnabled = true });
+        new ConfigStore(previous, "OTHERPC").Save(new PreflightConfig { GameBase = "other" });
+        var store = new ConfigStore(dir.Combine("package", "LocalState"), "PC1");
+
+        Assert.True(store.ImportIfMissing(previous));
+
+        var imported = store.Load();
+        Assert.Equal("G", imported.GameBase);
+        Assert.True(imported.StarStringsEnabled);
+        Assert.Equal(PathUtil.Normalize(dir.Combine("roaming")), store.ResolveLinkRoot(imported));
+        Assert.Equal(["config.PC1.json"], Directory.GetFiles(store.ConfigDirectory).Select(Path.GetFileName)); // nothing else copied
+        Assert.Equal("..", new ConfigStore(previous, "PC1").Load().LinkRoot); // original untouched
+    }
+
+    [Fact]
+    public void Import_NeverOverwritesExistingSettings()
+    {
+        using var dir = new TempDir();
+        new ConfigStore(dir.Combine("previous"), "PC1").Save(new PreflightConfig { GameBase = "old" });
+        var store = new ConfigStore(dir.Combine("store"), "PC1");
+        store.Save(new PreflightConfig { GameBase = "current" });
+
+        Assert.False(store.ImportIfMissing(dir.Combine("previous")));
+        Assert.Equal("current", store.Load().GameBase);
+    }
+
+    [Fact]
+    public void Import_DoesNothingWithoutPreviousSettings()
+    {
+        using var dir = new TempDir();
+        var store = new ConfigStore(dir.Combine("store"), "PC1");
+
+        Assert.False(store.ImportIfMissing(dir.Combine("missing")));
+        Assert.False(store.Exists);
+    }
+
+    [Fact]
+    public void Import_RejectsDamagedOrOversizedFilesWithoutCreatingSettings()
+    {
+        using var dir = new TempDir();
+        var store = new ConfigStore(dir.Combine("store"), "PC1");
+
+        dir.WriteFile("damaged/config.PC1.json", "{ not json");
+        Assert.ThrowsAny<System.Text.Json.JsonException>(() => store.ImportIfMissing(dir.Combine("damaged")));
+
+        dir.WriteFile("huge/config.PC1.json", new string(' ', (int)ConfigStore.MaxImportSize + 1));
+        Assert.Throws<InvalidDataException>(() => store.ImportIfMissing(dir.Combine("huge")));
+
+        Assert.False(store.Exists);
+    }
+
     [Fact]
     public void CreateDefault_UsesAppDirectoryInPortableMode()
     {

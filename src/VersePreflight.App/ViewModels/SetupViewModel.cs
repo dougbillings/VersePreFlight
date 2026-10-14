@@ -61,6 +61,8 @@ public sealed partial class SetupViewModel : ViewModelBase
     public string Disclaimer => AppInfo.Disclaimer;
     public string TrademarkNotice => AppInfo.TrademarkNotice;
     public string StarStringsCredit => AppInfo.StarStringsCredit;
+    /// <summary>Store installs are updated by the Store, so the GitHub update check isn't offered.</summary>
+    public bool IsStoreInstall => PackageIdentity.IsPackaged;
     public IReadOnlyList<string> GameBaseCandidates { get; }
     public ObservableCollection<LinkToggleViewModel> Links { get; }
 

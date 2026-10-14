@@ -1,0 +1,50 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Microsoft Store (MSIX) package manifest. Built by tools/Msix/build-msix.ps1, which fills in the version.
+  The Identity and PublisherDisplayName values come from Partner Center (Product management > Product
+  identity) and must match it exactly. The Store re-signs the package, so no certificate is needed here.
+-->
+<Package
+  xmlns="http://schemas.microsoft.com/appx/manifest/foundation/windows10"
+  xmlns:uap="http://schemas.microsoft.com/appx/manifest/uap/windows10"
+  xmlns:rescap="http://schemas.microsoft.com/appx/manifest/foundation/windows10/restrictedcapabilities"
+  IgnorableNamespaces="uap rescap">
+
+  <Identity
+    Name="dougbillings.VersePreflight"
+    Publisher="CN=E0CF50B7-A48F-474E-AB28-683D29853DEB"
+    Version="0.0.0.0"
+    ProcessorArchitecture="x64" />
+
+  <Properties>
+    <DisplayName>Verse Preflight</DisplayName>
+    <PublisherDisplayName>dougbillings</PublisherDisplayName>
+    <Logo>Assets\StoreLogo.png</Logo>
+    <Description>Gets Star Citizen ready after every patch. Unofficial fan project, not affiliated with the Cloud Imperium group of companies.</Description>
+  </Properties>
+
+  <!-- 19041 (Windows 10 2004): packaged apps can change and delete existing AppData files in place -->
+  <Dependencies>
+    <TargetDeviceFamily Name="Windows.Desktop" MinVersion="10.0.19041.0" MaxVersionTested="10.0.26100.0" />
+  </Dependencies>
+
+  <Resources>
+    <Resource Language="en-us" />
+  </Resources>
+
+  <Applications>
+    <Application Id="VersePreflight" Executable="VersePreflight.exe" EntryPoint="Windows.FullTrustApplication">
+      <uap:VisualElements
+        DisplayName="Verse Preflight"
+        Description="Gets Star Citizen ready after every patch: folder links, cache cleaning and optional StarStrings."
+        BackgroundColor="transparent"
+        Square150x150Logo="Assets\Square150x150Logo.png"
+        Square44x44Logo="Assets\Square44x44Logo.png" />
+    </Application>
+  </Applications>
+
+  <!-- A regular desktop app: it links folders in the game install and reads the user's own game files -->
+  <Capabilities>
+    <rescap:Capability Name="runFullTrust" />
+  </Capabilities>
+</Package>

@@ -23,6 +23,11 @@ for the portable version, in the folder you put the app in):
 The app reads your game install and your saved characters only to show them to you. It never sends
 them anywhere.
 
+When the Microsoft Store version starts for the first time, it copies this PC's settings file from
+an earlier non-Store install of Verse Preflight, if there is one, so you don't have to set it up
+again. Only the settings file is copied, from one folder on your PC to another; the original is left
+as it was.
+
 ## When the app connects to the internet
 
 Verse Preflight only connects to GitHub, and only for these reasons:

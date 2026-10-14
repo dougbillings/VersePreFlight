@@ -85,4 +85,32 @@ public sealed class ConfigStore
     /// <summary>The config's LinkRoot as an absolute path, or null if not set.</summary>
     public string? ResolveLinkRoot(PreflightConfig config) =>
         string.IsNullOrWhiteSpace(config.LinkRoot) ? null : PathUtil.ResolveRelativeTo(config.LinkRoot, ConfigDirectory);
+
+    /// <summary>A settings file is a few KB; anything far bigger isn't one.</summary>
+    internal const long MaxImportSize = 1024 * 1024;
+
+    /// <summary>
+    /// One-time import when this store has no settings yet: copies this machine's settings file (and
+    /// nothing else) from <paramref name="previousConfigDirectory"/>. The file must parse as settings,
+    /// a relative link folder is made absolute so it still points at the same place, and the original
+    /// is left untouched. Returns false if there was nothing to import.
+    /// </summary>
+    /// <exception cref="JsonException">The previous settings file is damaged.</exception>
+    /// <exception cref="InvalidDataException">The previous settings file is too large to be one.</exception>
+    public bool ImportIfMissing(string previousConfigDirectory)
+    {
+        var source = Path.Combine(previousConfigDirectory, Path.GetFileName(FilePath)); // same machine only
+        if (Exists || PathUtil.IsSamePath(source, FilePath) || !File.Exists(source)) return false;
+        if (new FileInfo(source).Length > MaxImportSize) throw new InvalidDataException("The previous settings file is too large.");
+
+        PreflightConfig? config;
+        using (var stream = File.OpenRead(source))
+            config = JsonSerializer.Deserialize(stream, ConfigJsonContext.Default.PreflightConfig);
+        if (config is null) return false;
+
+        if (!string.IsNullOrWhiteSpace(config.LinkRoot))
+            config.LinkRoot = PathUtil.ResolveRelativeTo(config.LinkRoot, previousConfigDirectory);
+        Save(config);
+        return true;
+    }
 }

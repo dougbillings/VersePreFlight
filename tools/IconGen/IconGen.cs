@@ -18,6 +18,21 @@ File.WriteAllBytes(Path.Combine(pngDir, "icon-256.png"), Render(256));
 File.WriteAllBytes(Path.Combine(pngDir, "icon-512.png"), Render(512));
 Console.WriteLine($"Wrote {icoPath} ({images.Count} sizes) and PNGs in {pngDir}");
 
+// Microsoft Store (MSIX) logos. The targetsize variants are picked by Windows for the taskbar,
+// Start and Explorer; "altform-unplated" means drawn without a coloured plate behind it.
+var msixDir = Path.Combine(repo, "packaging", "msix", "Assets");
+Directory.CreateDirectory(msixDir);
+File.WriteAllBytes(Path.Combine(msixDir, "StoreLogo.png"), Render(50));
+File.WriteAllBytes(Path.Combine(msixDir, "Square150x150Logo.png"), Render(150));
+File.WriteAllBytes(Path.Combine(msixDir, "Square44x44Logo.png"), Render(44));
+foreach (var size in (int[])[16, 24, 32, 48, 256])
+{
+    var png = Render(size);
+    File.WriteAllBytes(Path.Combine(msixDir, $"Square44x44Logo.targetsize-{size}.png"), png);
+    File.WriteAllBytes(Path.Combine(msixDir, $"Square44x44Logo.targetsize-{size}_altform-unplated.png"), png);
+}
+Console.WriteLine($"Wrote Store logos in {msixDir}");
+
 // Optional: "--preview <file.png>" writes the small sizes enlarged (pixelated) on dark and light
 // backgrounds, to judge how the icon reads in a taskbar or title bar.
 if (args is ["--preview", var previewPath])

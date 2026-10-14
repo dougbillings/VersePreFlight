@@ -44,6 +44,7 @@ internal sealed class FakePlatform(params string[] shaderCacheDirectories) : IPl
     public string Name => "Fake";
     public string ConfigDirectory => throw new NotSupportedException();
     public string DataDirectory => throw new NotSupportedException();
+    public string? PreviousConfigDirectory => null;
     public IReadOnlyList<string> FindGameBaseCandidates() => [];
     public IReadOnlyList<string> GetShaderCacheDirectories() => shaderCacheDirectories;
     public IReadOnlyList<string> GetRunningGameProcesses() => [];

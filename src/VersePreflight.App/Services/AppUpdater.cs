@@ -2,12 +2,14 @@ using Velopack;
 using Velopack.Locators;
 using Velopack.Sources;
 using VersePreflight.Core;
+using VersePreflight.Core.Platforms;
 
 namespace VersePreflight.App.Services;
 
 /// <summary>
 /// App self-update through Velopack, using this project's GitHub Releases as the only source.
-/// Does nothing when the app wasn't installed by Velopack (e.g. a development build).
+/// Does nothing when the app wasn't installed by Velopack (e.g. a development build) or came from
+/// the Microsoft Store, which installs its own updates (and the privacy policy promises no other check).
 /// </summary>
 public sealed class AppUpdater
 {
@@ -15,6 +17,7 @@ public sealed class AppUpdater
 
     public AppUpdater()
     {
+        if (PackageIdentity.IsPackaged) return;
         try
         {
             // Pre-release builds (e.g. 0.2.0-beta.1) also follow pre-releases; stable builds only see stable releases

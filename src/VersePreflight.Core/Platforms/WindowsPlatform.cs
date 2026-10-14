@@ -19,11 +19,25 @@ public sealed class WindowsPlatform : IPlatform
 
     public string Name => "Windows";
 
-    public string ConfigDirectory =>
+    public string ConfigDirectory => PackageStateDirectory ?? RegularConfigDirectory;
+
+    public string DataDirectory => PackageStateDirectory ??
+        Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), AppInfo.Id);
+
+    // The Store version only reads this folder (never writes to it), so it sees the real files
+    public string? PreviousConfigDirectory => PackageIdentity.IsPackaged ? RegularConfigDirectory : null;
+
+    private static string RegularConfigDirectory =>
         Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), AppInfo.Id);
 
-    public string DataDirectory =>
-        Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), AppInfo.Id);
+    /// <summary>
+    /// Store (MSIX) installs keep everything in the package's own LocalState folder. Anywhere else under
+    /// AppData, files they create are redirected to a hidden per-package copy, so paths shown in the log
+    /// or opened in Explorer would point at nothing.
+    /// </summary>
+    private static string? PackageStateDirectory => PackageIdentity.FamilyName is { } family
+        ? Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "Packages", family, "LocalState")
+        : null;
 
     public IReadOnlyList<string> FindGameBaseCandidates() =>
         DriveInfo.GetDrives()

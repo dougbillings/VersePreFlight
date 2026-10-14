@@ -75,7 +75,10 @@
 
                 <StackPanel Spacing="4">
                     <TextBlock Classes="label" Text="UPDATES" />
-                    <CheckBox IsChecked="{Binding CheckForUpdates}" Content="Check GitHub for new versions at startup" />
+                    <CheckBox IsChecked="{Binding CheckForUpdates}" Content="Check GitHub for new versions at startup"
+                              IsVisible="{Binding !IsStoreInstall}" />
+                    <TextBlock Classes="dim" FontSize="12" TextWrapping="Wrap" IsVisible="{Binding IsStoreInstall}"
+                               Text="Updates are installed by the Microsoft Store." />
                 </StackPanel>
             </StackPanel>
 

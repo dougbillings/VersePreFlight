@@ -49,6 +49,7 @@ public sealed partial class MainViewModel : ViewModelBase, IDisposable
         _updater = updater;
         _log.EntryWritten += OnLogEntry;
 
+        ImportPreviousSettings();
         try
         {
             _config = store.Load();
@@ -69,6 +70,21 @@ public sealed partial class MainViewModel : ViewModelBase, IDisposable
 
         _gameTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(3) };
         _gameTimer.Tick += async (_, _) => await CheckGameRunningAsync();
+    }
+
+    /// <summary>The Store version starts once with this PC's settings from the regular install, if there are any.</summary>
+    private void ImportPreviousSettings()
+    {
+        if (_platform.PreviousConfigDirectory is not { } previous) return;
+        try
+        {
+            if (_store.ImportIfMissing(previous))
+                _log.Info($"Imported your settings from the regular (non-Store) install of {AppInfo.Name}.");
+        }
+        catch (Exception e) when (e is JsonException or InvalidDataException or IOException or UnauthorizedAccessException)
+        {
+            _log.Warning($"Could not import settings from the regular install ({e.Message}). Please set up again.");
+        }
     }
 
     public CharactersViewModel Characters { get; }
@@ -109,10 +125,13 @@ public sealed partial class MainViewModel : ViewModelBase, IDisposable
 
     public bool CanAct => !IsBusy && !IsGameRunning;
 
+    /// <summary>How this copy was installed, for the log and bug reports.</summary>
+    private string InstallKind =>
+        PackageIdentity.IsPackaged ? " (Microsoft Store)" : _store.IsPortable ? " (portable)" : "";
+
     public async Task InitializeAsync()
     {
-        _log.Info($"{AppInfo.Name} {AppInfo.Version} started on {Environment.MachineName}" +
-                  (_store.IsPortable ? " (portable)." : "."));
+        _log.Info($"{AppInfo.Name} {AppInfo.Version} started on {Environment.MachineName}{InstallKind}.");
         await CheckGameRunningAsync();
         _gameTimer.Start();
 
@@ -223,14 +242,14 @@ public sealed partial class MainViewModel : ViewModelBase, IDisposable
     private string BuildDiagnosticsSummary()
     {
         var text = new System.Text.StringBuilder()
-            .AppendLine($"{AppInfo.Name} {AppInfo.Version}{(_store.IsPortable ? " (portable)" : "")}")
+            .AppendLine($"{AppInfo.Name} {AppInfo.Version}{InstallKind}")
             .AppendLine($"OS: {System.Runtime.InteropServices.RuntimeInformation.OSDescription} " +
                         $"({System.Runtime.InteropServices.RuntimeInformation.OSArchitecture}), .NET {Environment.Version}")
             .AppendLine($"Settings: {_config.Links.Count(l => l.Enabled)} of {_config.Links.Count} links on, " +
                         $"link folder {(_store.ResolveLinkRoot(_config) is null ? "not set" : "set")}, " +
                         $"StarStrings {(_config.StarStringsEnabled ? "on" : "off")}" +
                         $"{(_config.StarStringsIncludePtu ? " (incl. PTU)" : "")}, " +
-                        $"update check {(_config.CheckForUpdates ? "on" : "off")}");
+                        (PackageIdentity.IsPackaged ? "updates by Microsoft Store" : $"update check {(_config.CheckForUpdates ? "on" : "off")}"));
 
         if (Environments.Count == 0) text.AppendLine("Installs: none detected");
         foreach (var env in Environments)

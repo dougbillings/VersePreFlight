@@ -1,0 +1,12 @@
+<!--
+  Downloads the Windows SDK packaging tools (makeappx, makepri) as a pinned NuGet package, so building
+  the Microsoft Store package needs no Windows SDK install. Used by build-msix.ps1: dotnet restore tools/Msix
+-->
+<Project Sdk="Microsoft.Build.NoTargets/3.7.56">
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+  </PropertyGroup>
+  <ItemGroup>
+    <PackageDownload Include="Microsoft.Windows.SDK.BuildTools" Version="[10.0.28000.2705]" />
+  </ItemGroup>
+</Project>

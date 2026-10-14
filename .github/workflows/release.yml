@@ -64,3 +64,16 @@ jobs:
           --releaseName "Verse Preflight ${{ env.VERSION }}"
           --tag ${{ github.ref_name }}
           -o releases
+
+      # Microsoft Store package. It's unsigned (the Store signs it after certification), so it isn't attached
+      # to the GitHub release: download it from this run's artifacts and upload it in Partner Center.
+      - name: Build Store package
+        shell: pwsh
+        run: tools/Msix/build-msix.ps1 -Version ${{ env.VERSION }}
+
+      - name: Keep Store package
+        uses: actions/upload-artifact@v4
+        with:
+          name: store-package-${{ env.VERSION }}
+          path: artifacts/msix/*.msix
+          if-no-files-found: error
