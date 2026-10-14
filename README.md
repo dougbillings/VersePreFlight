@@ -74,6 +74,25 @@ The app checks this repository's GitHub Releases for new versions at startup (it
 Settings). No other network requests are made, apart from StarStrings downloads when enabled.
 See the [privacy policy](PRIVACY.md).
 
+## Code signing policy
+
+Free code signing provided by [SignPath.io](https://about.signpath.io), certificate by
+[SignPath Foundation](https://signpath.org).
+
+- **Committers and reviewers:** [dougbillings](https://github.com/dougbillings)
+- **Approvers:** [dougbillings](https://github.com/dougbillings)
+
+Only files built from this repository's source by its GitHub Actions release workflow are signed:
+the app (`VersePreflight.exe`) and the installer (`VersePreflight-win-Setup.exe`). Every signing
+request is approved by hand. Velopack's own `Update.exe`, an upstream MIT-licensed component, is
+included unsigned. Releases made before the SignPath Foundation approval are unsigned. The Microsoft
+Store version is signed by Microsoft.
+
+**Privacy:** Verse Preflight collects no data and sends no information about the user or their PC
+to any networked system. Its only connections are ordinary downloads from GitHub: the check for new versions (on by default, shown on
+the first-run screen and can be turned off in Settings; the Microsoft Store version never does it)
+and StarStrings downloads when the user turns that option on. See the [privacy policy](PRIVACY.md).
+
 ## Credits
 
 - **StarStrings** by [MrKraken](https://github.com/MrKraken/StarStrings): a community-made,

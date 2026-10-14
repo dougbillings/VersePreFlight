@@ -33,6 +33,40 @@ jobs:
       - name: Publish
         run: dotnet publish src/VersePreflight.App -p:PublishProfile=win-x64 -p:Version=${{ env.VERSION }} -o publish
 
+      # Code signing by SignPath Foundation (free for open source; see "Code signing policy" in the README).
+      # The signing steps run once the repository variable SIGNPATH_ORGANIZATION_ID and the secret
+      # SIGNPATH_API_TOKEN are set; until then releases are built unsigned. Each request waits for a manual
+      # approval in SignPath. Artifact configurations: packaging/signpath.
+      - name: Keep app for signing
+        id: unsigned-app
+        if: vars.SIGNPATH_ORGANIZATION_ID != ''
+        uses: actions/upload-artifact@v4
+        with:
+          name: unsigned-app
+          path: publish/VersePreflight.exe
+          if-no-files-found: error
+
+      - name: Sign app
+        if: vars.SIGNPATH_ORGANIZATION_ID != ''
+        uses: signpath/github-action-submit-signing-request@v3
+        with:
+          api-token: ${{ secrets.SIGNPATH_API_TOKEN }}
+          organization-id: ${{ vars.SIGNPATH_ORGANIZATION_ID }}
+          project-slug: VersePreflight
+          signing-policy-slug: release-signing
+          artifact-configuration-slug: app
+          github-artifact-id: ${{ steps.unsigned-app.outputs.artifact-id }}
+          wait-for-completion-timeout-in-seconds: 3600
+          output-artifact-directory: signed-app
+
+      - name: Use signed app
+        if: vars.SIGNPATH_ORGANIZATION_ID != ''
+        shell: pwsh
+        run: |
+          $status = (Get-AuthenticodeSignature signed-app/VersePreflight.exe).Status
+          if ($status -ne 'Valid') { throw "The signed app's signature is $status." }
+          Copy-Item signed-app/VersePreflight.exe publish/VersePreflight.exe -Force
+
       - name: Restore tools
         run: dotnet tool restore
 
@@ -41,7 +75,7 @@ jobs:
         continue-on-error: true
         run: dotnet vpk download github --repoUrl ${{ github.server_url }}/${{ github.repository }} --token ${{ secrets.GITHUB_TOKEN }} ${{ env.PRERELEASE }} -o releases
 
-      # Code signing goes here once available, via --signParams or --azureTrustedSignFile
+      # The app inside the packages is already signed (above); the installer is signed after packing (below)
       - name: Package
         run: >
           dotnet vpk pack
@@ -54,6 +88,36 @@ jobs:
           --packAuthors "Verse Preflight contributors"
           --releaseNotes .github/release-notes.md
           -o releases
+
+      - name: Keep installer for signing
+        id: unsigned-installer
+        if: vars.SIGNPATH_ORGANIZATION_ID != ''
+        uses: actions/upload-artifact@v4
+        with:
+          name: unsigned-installer
+          path: releases/VersePreflight-win-Setup.exe
+          if-no-files-found: error
+
+      - name: Sign installer
+        if: vars.SIGNPATH_ORGANIZATION_ID != ''
+        uses: signpath/github-action-submit-signing-request@v3
+        with:
+          api-token: ${{ secrets.SIGNPATH_API_TOKEN }}
+          organization-id: ${{ vars.SIGNPATH_ORGANIZATION_ID }}
+          project-slug: VersePreflight
+          signing-policy-slug: release-signing
+          artifact-configuration-slug: installer
+          github-artifact-id: ${{ steps.unsigned-installer.outputs.artifact-id }}
+          wait-for-completion-timeout-in-seconds: 3600
+          output-artifact-directory: signed-installer
+
+      - name: Use signed installer
+        if: vars.SIGNPATH_ORGANIZATION_ID != ''
+        shell: pwsh
+        run: |
+          $status = (Get-AuthenticodeSignature signed-installer/VersePreflight-win-Setup.exe).Status
+          if ($status -ne 'Valid') { throw "The signed installer's signature is $status." }
+          Copy-Item signed-installer/VersePreflight-win-Setup.exe releases/VersePreflight-win-Setup.exe -Force
 
       - name: Upload to GitHub release
         run: >
